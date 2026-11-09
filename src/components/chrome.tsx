@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarDays, ChevronDown, ExternalLink, FileText, Inbox } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -73,11 +74,10 @@ export function Avatar({ initials }: { initials: string }) {
 }
 
 export function ChannelIcon({ channel }: { channel: "LinkedIn" | "X" }) {
-  return channel === "LinkedIn" ? (
-    <span aria-hidden="true" className="channel-icon channel-linkedin">in</span>
-  ) : (
-    <span aria-hidden="true" className="channel-icon channel-x">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-6.8 7.8L23.2 22H17l-4.9-7.4L5.6 22H2.4l8.3-9.6L.8 2h6.4l4.4 6.7L18.9 2Zm-1.1 18h1.7L6.2 4H4.4l13.4 16Z" /></svg>
+  const isLinkedIn = channel === "LinkedIn";
+  return (
+    <span aria-hidden="true" className={cn("channel-icon", !isLinkedIn && "channel-x")}>
+      <Image src={isLinkedIn ? "/icons/linkedin.svg" : "/icons/x.svg"} alt="" width={31} height={31} unoptimized />
     </span>
   );
 }

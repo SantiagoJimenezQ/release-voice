@@ -52,5 +52,6 @@ The blog's guides and case studies also distinguish who performs each step and s
 This demo supports three Zernio releases. Suggested dates are a November 9–13, 2026 example and stay in the calendar. Browser session storage holds editable copy, optional writing preferences, and draft receipts. Fetched private email content remains in memory and stays outside the model request.
 
 Third-party notices are included for the [Geist font](licenses/geist-OFL.txt) and [shadcn components](licenses/shadcn-MIT.txt).
+The LinkedIn and X logos are sourced from [SVGL](https://github.com/pheralb/svgl). See the [SVGL license](licenses/svgl-MIT.txt).
 
 Zernio references: [create a post](https://docs.zernio.com/posts/create-post), [connected accounts](https://docs.zernio.com/accounts/list-accounts), and [email integrations](https://zernio.com/blog/google-microsoft-integrations).
