@@ -8,8 +8,7 @@ const exampleDrafts = [
   { channel: "X", copy: "Draft → review → schedule. Keep the review step in Zernio." },
 ] as const;
 
-export function Welcome({ publicDemo, onSample, onConnect, onPaste }: {
-  publicDemo: boolean;
+export function Welcome({ onSample, onConnect, onPaste }: {
   onSample: () => void;
   onConnect: () => void;
   onPaste: () => void;
@@ -60,7 +59,7 @@ export function Welcome({ publicDemo, onSample, onConnect, onPaste }: {
       <section className="welcome-import" aria-labelledby="welcome-import-heading">
         <div>
           <h2 id="welcome-import-heading">Have a release to share?</h2>
-          <p>{publicDemo ? "Paste a supported release link, or set up email import locally." : "Start from a link or a launch email."}</p>
+          <p>Paste a supported release link or import a launch email through Zernio.</p>
         </div>
         <div className="button-row">
           <Button variant="outline" className="ui-button" onClick={onPaste}><Link2 data-icon="inline-start" />Paste a release link</Button>

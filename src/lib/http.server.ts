@@ -1,12 +1,10 @@
 import "server-only";
 
-const loopbackHost = /^(127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/;
+import { RequestError } from "./http";
 
-export class RequestError extends Error {
-  constructor(message: string, readonly status = 502) {
-    super(message);
-  }
-}
+export { boundedJson, RequestError } from "./http";
+
+const loopbackHost = /^(127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/;
 
 export function isPublicDemo() {
   return process.env.VERCEL === "1" || process.env.RELEASE_VOICE_MODE === "public";
@@ -33,32 +31,6 @@ export function requireGenerationOrigin(request: Request) {
   if (!isPublicDemo() || loopbackHost.test(host)) return requireLocal(request);
   if (!host || request.headers.get("origin") !== `https://${host}` || !isSameSite(request)) {
     throw new RequestError("Open Release Voice directly to generate drafts.", 403);
-  }
-}
-
-export async function boundedJson(message: Request | Response, limit: number): Promise<unknown> {
-  const reader = message.body?.getReader();
-  if (!reader) throw new RequestError("Missing JSON body.", 400);
-  const decoder = new TextDecoder();
-  let size = 0;
-  let body = "";
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) {
-        await reader.cancel();
-        throw new RequestError("The response or request is too large.", 413);
-      }
-      body += decoder.decode(value, { stream: true });
-    }
-    return JSON.parse(body + decoder.decode());
-  } catch (error) {
-    if (error instanceof SyntaxError) throw new RequestError("Invalid JSON.", 400);
-    throw error;
-  } finally {
-    reader.releaseLock();
   }
 }
 

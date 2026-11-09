@@ -23,7 +23,11 @@ Choose **Check source** on either card to read the release excerpts for that ang
 
 Import this repository as a Next.js project with the repository root as the root directory. Set `RELEASE_VOICE_MODE=public` in the Vercel project’s deployment environments. This works with automatic system environment exposure disabled. Use the same setting in `.env.local` to preview public mode on localhost.
 
-Public mode opens on the welcome screen. The inbox shows sample announcements alongside any supported release links the visitor pastes. **Import from email** points to local setup. The public demo rehearses scheduling and LinkedIn saves in the visitor’s tab. With no credentials, it uses labeled prewritten copy. To enable personalized drafting, set these server-side variables in Vercel:
+Public mode opens on the welcome screen. Visitors can use samples, paste a supported release link, and rehearse scheduling and LinkedIn saves without a Zernio key.
+
+Choose **Import from email** or **Connect Zernio** to enter a key for an existing Zernio workspace. Select a connected Gmail or Outlook mailbox to import matching launch emails, and choose a connected LinkedIn account to save a reviewed draft. Sender filters apply to email imports. The browser sends the key directly to Zernio, and keeps the key, imported messages, and connected drafts in memory until reload or disconnect. A confirmed LinkedIn draft remains in Zernio.
+
+To enable personalized drafting, set these server-side variables in Vercel. When they are missing, the app uses labeled prewritten copy.
 
 | Variable | Purpose |
 | --- | --- |
@@ -32,7 +36,7 @@ Public mode opens on the welcome screen. The inbox shows sample announcements al
 | `UPSTASH_REDIS_REST_URL` | HTTPS URL for the shared rate limiter |
 | `UPSTASH_REDIS_REST_TOKEN` | Redis REST token with write access |
 
-The limiter reserves up to six generation requests per ten-minute bucket and 120 requests per UTC day across the deployment. Requests with a verified Vercel IP use a keyed hash in the visitor counter. Other requests use a shared bucket. If Redis cannot confirm a reservation, the app returns an error before calling OpenRouter. Public mode blocks live Zernio account discovery, email reads, and draft saves at the API routes.
+The limiter reserves up to six generation requests per ten-minute bucket and 120 requests per UTC day across the deployment. Requests with a verified Vercel IP use a keyed hash in the visitor counter. Other requests use a shared bucket. If Redis cannot confirm a reservation, the app returns an error before calling OpenRouter. The hosted app uses its Next.js API for generation and calls Zernio directly from the browser.
 
 ## Live local mode
 

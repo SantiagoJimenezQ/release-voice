@@ -29,7 +29,7 @@ export default function HowItWorksPage() {
           <section className="design-section" aria-labelledby="design-architecture">
             <h2 id="design-architecture">Architecture and data flow</h2>
             <figure className="design-figure" aria-labelledby="design-context-caption">
-              <figcaption id="design-context-caption"><span>01</span> System boundaries</figcaption>
+              <figcaption id="design-context-caption"><span>01</span> Local deployment</figcaption>
               <div className="design-topology">
                 <div className="design-node">
                   <strong>Browser</strong>
@@ -47,9 +47,9 @@ export default function HowItWorksPage() {
                 </ul>
               </div>
             </figure>
-            <p><code>GET /api/mail</code> reads recent Gmail or Outlook messages through Zernio, checks any configured sender domains, and resolves a supported release URL. Pasting a release link resolves to the same release ID.</p>
+            <p>Email intake checks recent Gmail or Outlook messages for a supported release URL and applies any sender filters. Local mode uses <code>GET /api/mail</code>. On Vercel, connecting a key lets the browser call Zernio directly. Pasting a release link resolves to the same release ID.</p>
             <p><code>POST /api/generate</code> looks up the curated public brief and sends it to OpenRouter with editorial guidelines and optional writing instructions or a sample. Next.js validates the LinkedIn and X response before showing it. The original email stays outside the model request.</p>
-            <p>Imported mail stays in memory. Draft edits, writing preferences, and save receipts live in tab storage. Sender filters persist in browser storage.</p>
+            <p>The visitor’s Zernio key, imported mail, and connected draft state stay in memory. Demo draft edits and writing preferences live in tab storage. Sender filters persist in browser storage.</p>
           </section>
 
           <section className="design-section" aria-labelledby="design-save">
@@ -60,16 +60,16 @@ export default function HowItWorksPage() {
                 <li className="design-node"><strong>1. Author confirms</strong><p>Save the reviewed LinkedIn copy.</p></li>
                 <li className="design-node design-node-core">
                   <ArrowRight className="design-connector" aria-hidden="true" />
-                  <strong>2. Server sends a draft</strong><p>Recheck the account and send one target with <code>isDraft: true</code>.</p>
+                  <strong>2. App sends a draft</strong><p>Recheck the account and send one target with <code>isDraft: true</code>.</p>
                 </li>
                 <li className="design-node">
                   <ArrowRight className="design-connector" aria-hidden="true" />
                   <strong>3. App shows a receipt</strong><p>Verify Zernio’s draft ID, status, target, and copy.</p>
                 </li>
               </ol>
-              <p className="design-retry">If the response is uncertain, retrying the same account and copy reuses the original <code>Idempotency-Key</code>.</p>
+              <p className="design-retry">Local retries reuse the original <code>Idempotency-Key</code>. If a browser save is unconfirmed, check Zernio before trying again.</p>
             </figure>
-            <p><code>POST /api/linkedin-draft</code> handles the only live write. If the request fails or the response does not match, the app keeps the edits and shows an error. The X draft remains editable in the browser.</p>
+            <p>Saving a LinkedIn draft is the only live write. Local mode uses <code>POST /api/linkedin-draft</code> and the hosted connection uses Zernio’s REST API directly. The X draft remains editable in the browser.</p>
           </section>
 
           <section className="design-section" aria-labelledby="design-scope">
@@ -78,7 +78,7 @@ export default function HowItWorksPage() {
             <p>We verified live OpenRouter generation and read back a real Zernio draft with LinkedIn as its only target. Gmail and Outlook filtering were checked against mocked responses.</p>
             <aside className="design-deployment" aria-labelledby="design-deployment-title">
               <h3 id="design-deployment-title">Public deployment</h3>
-              <p>Vercel runs the sample inbox and simulated saves. The live Zernio routes require local mode and loopback access. When configured, public OpenRouter drafting checks shared per-visitor and daily quotas before making a model request.</p>
+              <p>Vercel offers sample releases and rehearsals without a key. Visitors can connect their own Zernio key for email reads and LinkedIn draft saves. Public OpenRouter drafting checks shared per-visitor and daily quotas before making a model request.</p>
             </aside>
           </section>
         </article>

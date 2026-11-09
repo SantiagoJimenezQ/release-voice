@@ -42,7 +42,7 @@ type Props = {
   samplesLoaded: boolean;
   isReady: (item: Announcement) => boolean;
   generating: boolean;
-  publicDemo: boolean;
+  canFilterEmail: boolean;
   filterCount: number;
   onFilters: () => void;
   onSelect: (item: Announcement) => void;
@@ -56,7 +56,7 @@ function sourceLabel(item: Announcement) {
   return item.source === "sample" ? "Sample" : item.source === "link" ? "Pasted link" : item.provider ?? "Email";
 }
 
-export function Inbox({ items, selected, samplesLoaded, isReady, generating, publicDemo, filterCount, onFilters, onSelect, onConnect, onPaste, onSample, onDraft }: Props) {
+export function Inbox({ items, selected, samplesLoaded, isReady, generating, canFilterEmail, filterCount, onFilters, onSelect, onConnect, onPaste, onSample, onDraft }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   const empty = !selected;
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [empty]);
@@ -78,7 +78,7 @@ export function Inbox({ items, selected, samplesLoaded, isReady, generating, pub
         <Button variant="outline" className="ui-button" disabled={generating} onClick={onConnect}><Mail data-icon="inline-start" />Import from email</Button>
         <Button variant="outline" className="ui-button" disabled={generating} onClick={onPaste}><Link2 data-icon="inline-start" />Paste a release link</Button>
         {!samplesLoaded && selected ? <Button variant="outline" className="ui-button" disabled={generating} onClick={onSample}>Load samples</Button> : null}
-        {!publicDemo ? <Button variant="ghost" className="ui-button" disabled={generating} onClick={onFilters}><Settings2 data-icon="inline-start" />Sender filters{filterCount ? ` (${filterCount})` : ""}</Button> : null}
+        {canFilterEmail ? <Button variant="ghost" className="ui-button" disabled={generating} onClick={onFilters}><Settings2 data-icon="inline-start" />Sender filters{filterCount ? ` (${filterCount})` : ""}</Button> : null}
       </div>
       {selected ? (
         <div className="inbox-grid">

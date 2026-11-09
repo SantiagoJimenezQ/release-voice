@@ -47,7 +47,7 @@ export function LandingHeader() {
   );
 }
 
-export function Topbar({ view, sample, publicDemo, openWorkspace }: { view: View; sample: boolean; publicDemo: boolean; openWorkspace: () => void }) {
+export function Topbar({ view, sample, publicDemo, connected, openWorkspace }: { view: View; sample: boolean; publicDemo: boolean; connected: boolean; openWorkspace: () => void }) {
   return (
     <header className="topbar">
       <Wordmark />
@@ -61,7 +61,7 @@ export function Topbar({ view, sample, publicDemo, openWorkspace }: { view: View
       </nav>
       <div className="topbar-end">
         <Button variant="outline" className="workspace-trigger" onClick={openWorkspace}>
-          {publicDemo ? "Public demo" : sample ? "Sample workspace" : "Demo workspace"}<ChevronDown data-icon="inline-end" aria-hidden="true" />
+          {connected ? "Zernio connected" : publicDemo ? "Public demo" : sample ? "Sample workspace" : "Demo workspace"}<ChevronDown data-icon="inline-end" aria-hidden="true" />
         </Button>
         <Avatar initials={sample ? "AR" : "RV"} />
       </div>

@@ -28,15 +28,17 @@ type Props = {
   account?: string;
   sample: boolean;
   saving: boolean;
+  saveUnconfirmed: boolean;
   onAngleChange: (angle: DraftAngle) => void;
   onEdit: (channel: Channel, value: string) => void;
   onSource: () => void;
   onEmail: () => void;
   onSave: () => void;
+  onConnectZernio?: () => void;
   onSchedule: (channel: Channel, fields: RehearsalFields) => void;
 };
 
-export function Studio({ id, angle, focusChannel, draft, author, account, sample, saving, onAngleChange, onEdit, onSource, onEmail, onSave, onSchedule }: Props) {
+export function Studio({ id, angle, focusChannel, draft, author, account, sample, saving, saveUnconfirmed, onAngleChange, onEdit, onSource, onEmail, onSave, onConnectZernio, onSchedule }: Props) {
   const [editing, setEditing] = useState<Channel | null>(null);
   const [panel, setPanel] = useState<{ kind: PanelKind; angle: DraftAngle; channel: Channel } | null>(null);
   const panelTrigger = useRef<HTMLButtonElement | null>(null);
@@ -112,11 +114,16 @@ export function Studio({ id, angle, focusChannel, draft, author, account, sample
                 </section>
               ) : (
                 <div className="studio-footer">
-                  <span>{sample ? "Save a LinkedIn draft in rehearsal." : "Save a draft to your connected LinkedIn account."}</span>
-                  <Button variant="outline" disabled={!current.linkedin.trim() || saving} onClick={onSave}>
-                    {saving ? "Saving to Zernio…" : sample ? "Rehearse LinkedIn save" : account ? "Save LinkedIn draft" : "Connect LinkedIn"}
-                    {saving ? <LoaderCircle data-icon="inline-end" className="animate-spin motion-reduce:animate-none" /> : <ArrowRight data-icon="inline-end" />}
-                  </Button>
+                  <span>{saveUnconfirmed ? "Save unconfirmed. Check your drafts in Zernio." : sample ? "Save a LinkedIn draft in rehearsal." : account ? `Save a LinkedIn draft for ${account}.` : "Choose a connected LinkedIn account."}</span>
+                  {saveUnconfirmed ? <Button asChild variant="outline"><a href="https://zernio.com/dashboard" target="_blank" rel="noreferrer">Open Zernio</a></Button> : (
+                    <div className="button-row flex-wrap">
+                      {onConnectZernio ? <Button variant="ghost" onClick={onConnectZernio}>Connect Zernio</Button> : null}
+                      <Button variant="outline" disabled={!canScheduleDraft("linkedin", current.linkedin) || saving} onClick={onSave}>
+                        {saving ? "Saving to Zernio…" : sample ? "Rehearse LinkedIn save" : account ? "Save LinkedIn draft" : "Connect LinkedIn"}
+                        {saving ? <LoaderCircle data-icon="inline-end" className="animate-spin motion-reduce:animate-none" /> : <ArrowRight data-icon="inline-end" />}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </> : null}

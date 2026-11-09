@@ -396,7 +396,8 @@ svg { flex: none; }
   .draft-card { min-height: 0; }
   .studio-panel { padding: 24px 16px; }
   .studio-footer { padding-bottom: env(safe-area-inset-bottom); }
-  .studio-footer > button { width: 100%; }
+  .studio-footer > .button-row, .studio-footer > a { width: 100%; }
+  .studio-footer > .button-row > button { flex: 1; }
   .save-receipt { flex-wrap: wrap; }
   .save-receipt > a { margin-left: 0; width: 100%; }
   .reason-table td, .reason-table th { padding: 8px 7px; white-space: normal; }

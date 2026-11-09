@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Link2, LoaderCircle, Mail, Pencil, Settings2 } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ExternalLink, KeyRound, Link2, LoaderCircle, Mail, Pencil, Settings2 } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,9 +10,10 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Textarea } from "@/components/ui/textarea";
 import { request } from "@/lib/client";
 import { announcementSchema, connectionsSchema, draftResponseSchema, receiptSchema, senderDomainsSchema, writingInstructionsLimit, type Connections, type Receipt } from "@/lib/contracts";
-import { matchRelease, releases, sampleAnnouncements, type Announcement, type ReleaseId } from "@/lib/releases";
+import { matchRelease, releaseIds, releases, sampleAnnouncements, type Announcement, type ReleaseId } from "@/lib/releases";
 import { goTo, saveSenderDomains, updateSession, useSenderDomains, useSession, useView } from "@/lib/session";
-import { angleDraft, recommendedAngles, rehearsalFieldsSchema, updateAngleDraft, type Channel, type DraftAngle, type DraftVariant, type RehearsalFields } from "@/lib/studio-drafts";
+import { angleDraft, recommendedAngles, rehearsalFieldsSchema, updateAngleDraft, type Channel, type DraftAngle, type DraftState, type DraftVariant, type RehearsalFields } from "@/lib/studio-drafts";
+import { createZernioClient, UnconfirmedZernioSave } from "@/lib/zernio";
 import { LandingHeader, Topbar } from "./chrome";
 import { AnnouncementBody, Inbox } from "./inbox";
 import { Welcome } from "./welcome";
@@ -20,8 +21,10 @@ import { Calendar } from "./plan";
 import { SavedDrafts } from "./saved-drafts";
 import { Studio } from "./studio";
 
-type Overlay = "workspace" | "email" | "source" | "paste" | "connect" | "local-email" | "inbox-settings" | "writing-settings" | null;
-type Action = "generate" | "save" | "mail" | null;
+type Overlay = "workspace" | "email" | "source" | "paste" | "connect" | "zernio-key" | "inbox-settings" | "writing-settings" | null;
+type Action = "generate" | "save" | "mail" | "verify-key" | null;
+type ConnectionKind = "email" | "linkedin";
+type Drafts = Partial<Record<ReleaseId, DraftState>>;
 const emptyConnections: Connections = { configured: false, linkedin: [], mail: [] };
 
 function linkAnnouncement(releaseId: ReleaseId): Announcement {
@@ -30,6 +33,25 @@ function linkAnnouncement(releaseId: ReleaseId): Announcement {
 
 function draftBucket(publicDemo: boolean, sample: boolean) {
   return publicDemo ? "publicDrafts" : sample ? "sampleDrafts" : "drafts";
+}
+
+function copyDraftsForConnection(drafts: Drafts): Drafts {
+  const copy: Drafts = {};
+  for (const id of releaseIds) {
+    const draft = drafts[id];
+    if (!draft) continue;
+    const { workflow, perspective } = draft.alternatives ?? {};
+    copy[id] = {
+      ...draft,
+      receipt: undefined,
+      attempt: undefined,
+      alternatives: {
+        workflow: workflow && { ...workflow, receipt: undefined, attempt: undefined },
+        perspective: perspective && { ...perspective, receipt: undefined, attempt: undefined },
+      },
+    };
+  }
+  return copy;
 }
 
 export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: boolean; publicLiveDrafting: boolean }) {
@@ -46,19 +68,23 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   const [domainInput, setDomainInput] = useState("");
   const [writingInput, setWritingInput] = useState({ writingInstructions: "", writingSample: "" });
   const [paste, setPaste] = useState("");
-  const [connectFor, setConnectFor] = useState<"email" | "linkedin">("email");
+  const [connectFor, setConnectFor] = useState<ConnectionKind>("email");
+  const [connectAfterKey, setConnectAfterKey] = useState<ConnectionKind>();
+  const [browserZernio, setBrowserZernio] = useState<ReturnType<typeof createZernioClient>>();
+  const [connectedDrafts, setConnectedDrafts] = useState<Drafts>({});
+  const keyInput = useRef<HTMLInputElement>(null);
   const [returnToEmail, setReturnToEmail] = useState(false);
   const [dialogNotice, setDialogNotice] = useState("");
   const busy = useRef(false);
-  const sample = publicDemo || session.sample;
+  const sample = publicDemo ? !browserZernio : session.sample;
   const draftKey = draftBucket(publicDemo, sample);
-  const drafts = session[draftKey];
+  const drafts = browserZernio ? connectedDrafts : session[draftKey];
   const visibleMail = allowedDomains.length ? mail.filter((item) => item.senderDomain && allowedDomains.includes(item.senderDomain)) : mail;
   const samplesLoaded = publicDemo || session.samplesLoaded === true || session.sample;
   const personalItems = [...visibleMail, ...session.imported];
   const items = [...personalItems, ...(samplesLoaded ? sampleAnnouncements : [])];
   const selected = items.find((item) => item.releaseId === session.selected && item.source === session.selectedSource)
-    ?? (sample ? sampleAnnouncements : personalItems).find((item) => item.releaseId === (session.selected ?? (publicDemo ? "approvals" : undefined)))
+    ?? (publicDemo || sample ? sampleAnnouncements : personalItems).find((item) => item.releaseId === (session.selected ?? (publicDemo ? "approvals" : undefined)))
     ?? items[0];
   const workspaceItems = publicDemo ? items : sample ? sampleAnnouncements : personalItems;
   const calendarItems = [...new Map(workspaceItems.map((item) => [item.releaseId, item])).values()];
@@ -87,10 +113,11 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   async function refreshConnections() {
+    if (loadingConnections) return;
     setLoadingConnections(true);
     setDialogNotice("");
     try {
-      setConnections(await request("/api/connections", connectionsSchema));
+      setConnections(await (browserZernio ? browserZernio.connections() : request("/api/connections", connectionsSchema)));
     } catch (error) {
       setDialogNotice(message(error));
     } finally {
@@ -98,14 +125,65 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     }
   }
 
-  function openConnections(forKind: "email" | "linkedin") {
-    if (publicDemo) {
-      if (forKind === "email") show("local-email");
+  function openZernioKey(next?: ConnectionKind) {
+    setConnectAfterKey(next);
+    show("zernio-key");
+  }
+
+  function openConnections(forKind: ConnectionKind) {
+    if (publicDemo && !browserZernio) {
+      openZernioKey(forKind);
       return;
     }
     setConnectFor(forKind);
     show("connect");
     void refreshConnections();
+  }
+
+  async function connectZernio(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy.current) return;
+    const key = keyInput.current?.value.trim() ?? "";
+    if (!/^[\x21-\x7e]{1,512}$/.test(key)) {
+      setDialogNotice("Enter a valid Zernio API key.");
+      return;
+    }
+    event.currentTarget.reset();
+    busy.current = true;
+    setAction("verify-key");
+    setDialogNotice("");
+    try {
+      const client = createZernioClient(key, { browser: true });
+      const accounts = await client.connections();
+      setConnectedDrafts(copyDraftsForConnection(session.publicDrafts));
+      setBrowserZernio(client);
+      setConnections(accounts);
+      setNotice("");
+      if (connectAfterKey) {
+        setConnectFor(connectAfterKey);
+        show("connect");
+      } else {
+        show("workspace");
+      }
+    } catch (error) {
+      setDialogNotice(message(error));
+      keyInput.current?.focus();
+    } finally {
+      busy.current = false;
+      setAction(null);
+    }
+  }
+
+  function disconnectZernio() {
+    if (busy.current || loadingConnections) return;
+    setBrowserZernio(undefined);
+    setConnectedDrafts({});
+    setConnections(emptyConnections);
+    setTargetId("");
+    setMail([]);
+    setNotice("");
+    show(null);
+    goTo({ page: "inbox" });
   }
 
   function openInboxSettings(fromEmail = false) {
@@ -160,14 +238,15 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   async function importMail(accountId: string) {
-    if (publicDemo || busy.current) return;
+    if ((publicDemo && !browserZernio) || busy.current) return;
     busy.current = true;
     setAction("mail");
     setDialogNotice("");
     try {
       const query = new URLSearchParams({ accountId });
       for (const domain of allowedDomains) query.append("senderDomain", domain);
-      const items = await request(`/api/mail?${query}`, z.array(announcementSchema));
+      const items = await (browserZernio ? browserZernio.readLaunchEmails(accountId, allowedDomains)
+        : request(`/api/mail?${query}`, z.array(announcementSchema)));
       setMail(items);
       if (!items.length) {
         setDialogNotice(allowedDomains.length ? "No launch emails matched your allowed sender domains." : "No matching launch emails yet. You can paste a release link from the inbox.");
@@ -201,7 +280,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     const destination = draftBucket(publicDemo, useSamples);
     if (item) selectAnnouncement(item);
     setNotice("");
-    if (session[destination][id]) {
+    if ((browserZernio ? connectedDrafts : session[destination])[id]) {
       goTo({ page: "studio", releaseId: id, angle });
       return;
     }
@@ -216,15 +295,14 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
         writingSample,
         writingInstructions: sampleMode ? undefined : session.writingInstructions.trim(),
       });
-      updateSession((current) => ({
-        ...current,
-        [destination]: { ...current[destination], [id]: {
-          generated,
-          linkedin: `${generated.opening}\n${generated.linkedinBody}`,
-          x: generated.x,
-          writingSample: generated.source === "model" && writingSample ? writingSample : undefined,
-        } },
-      }));
+      const newDraft = {
+        generated,
+        linkedin: `${generated.opening}\n${generated.linkedinBody}`,
+        x: generated.x,
+        writingSample: generated.source === "model" && writingSample ? writingSample : undefined,
+      };
+      if (browserZernio) setConnectedDrafts((current) => ({ ...current, [id]: newDraft }));
+      else updateSession((current) => ({ ...current, [destination]: { ...current[destination], [id]: newDraft } }));
       goTo({ page: "studio", releaseId: id, angle });
     } catch (error) {
       setNotice(message(error));
@@ -235,10 +313,12 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   function changeDraft(id: ReleaseId, angle: DraftAngle, update: (current: DraftVariant) => DraftVariant) {
-    updateSession((current) => {
-      const old = current[draftKey][id];
-      return old ? { ...current, [draftKey]: { ...current[draftKey], [id]: updateAngleDraft(id, angle, old, update) } } : current;
-    });
+    const apply = (current: Drafts) => {
+      const old = current[id];
+      return old ? { ...current, [id]: updateAngleDraft(id, angle, old, update) } : current;
+    };
+    if (browserZernio) setConnectedDrafts(apply);
+    else updateSession((current) => ({ ...current, [draftKey]: apply(current[draftKey]) }));
   }
 
   function scheduleDraft(id: ReleaseId, angle: DraftAngle, channel: Channel, fields: RehearsalFields) {
@@ -253,7 +333,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
 
   async function saveDraft(id: ReleaseId, angle: DraftAngle, draft: DraftVariant) {
     const content = draft.linkedin.trim();
-    if (busy.current || draft.receipt || !content) return;
+    if (busy.current || draft.receipt || (browserZernio && draft.attempt) || !content || content.length > 3000) return;
     setNotice("");
     if (sample) {
       const receipt: Receipt = { mode: "sample", status: "draft", content, account: "Alex Rivera", postId: crypto.randomUUID() };
@@ -269,12 +349,13 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     const previous = draft.attempt;
     const attempt = previous?.accountId === target.id && previous.content === content
       ? previous : { requestId: crypto.randomUUID(), accountId: target.id, content };
-    changeDraft(id, angle, (current) => ({ ...current, attempt }));
+    if (!browserZernio) changeDraft(id, angle, (current) => ({ ...current, attempt }));
     try {
-      const receipt = await request("/api/linkedin-draft", receiptSchema, attempt);
+      const receipt = await (browserZernio ? browserZernio.saveLinkedIn(attempt) : request("/api/linkedin-draft", receiptSchema, attempt));
       if (receipt.mode !== "zernio") throw new Error("A live Zernio receipt is required.");
       changeDraft(id, angle, (current) => ({ ...current, receipt }));
     } catch (error) {
+      if (error instanceof UnconfirmedZernioSave) changeDraft(id, angle, (current) => ({ ...current, attempt }));
       setNotice(message(error));
     } finally {
       busy.current = false;
@@ -298,26 +379,28 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   return (
     <>
       {showWelcome ? <LandingHeader /> : (
-        <Topbar view={displayed} sample={sample} publicDemo={publicDemo} openWorkspace={() => show("workspace")} />
+        <Topbar view={displayed} sample={sample} publicDemo={publicDemo} connected={Boolean(browserZernio)} openWorkspace={() => show("workspace")} />
       )}
       {notice ? <p className="notice" role="status">{notice}</p> : null}
       {studioId && draft && variant ? (
-        <Studio key={`${draftKey}/${studioId}`} id={studioId} angle={studioAngle} draft={draft}
+        <Studio key={`${browserZernio ? "connected" : draftKey}/${studioId}`} id={studioId} angle={studioAngle} draft={draft}
           focusChannel={view.page === "studio" ? view.channel : undefined}
           author={sample ? "Alex Rivera" : (variant.receipt?.account || target?.label || "Your workspace")}
           account={sample ? undefined : variant.receipt?.account ?? target?.label} sample={sample} saving={action === "save"}
+          saveUnconfirmed={Boolean(browserZernio && variant.attempt)}
           onAngleChange={(angle) => goTo({ page: "studio", releaseId: studioId, angle }, false)}
-          onEdit={(channel, value) => changeDraft(studioId, studioAngle, (current) => busy.current ? current : ({ ...current, [channel]: value }))}
+          onEdit={(channel, value) => { if (!busy.current) changeDraft(studioId, studioAngle, (current) => ({ ...current, [channel]: value })); }}
           onSource={() => show("source")} onEmail={() => show("email")} onSave={() => void saveDraft(studioId, studioAngle, variant)}
+          onConnectZernio={publicDemo && !browserZernio ? () => openZernioKey("linkedin") : undefined}
           onSchedule={(channel, fields) => scheduleDraft(studioId, studioAngle, channel, fields)} />
       ) : displayed.page === "calendar" ? <Calendar items={calendarItems} drafts={drafts} date={displayed.date} busy={action === "generate"} onDraft={(id, angle) => void openStudio(id, angle)} />
         : displayed.page === "drafts" ? <SavedDrafts drafts={drafts} sample={sample} />
-          : showWelcome ? <Welcome publicDemo={publicDemo} onSample={startSample} onConnect={() => openConnections("email")} onPaste={() => show("paste")} />
+          : showWelcome ? <Welcome onSample={startSample} onConnect={() => openConnections("email")} onPaste={() => show("paste")} />
           : <Inbox items={items} selected={selected} samplesLoaded={samplesLoaded}
-              isReady={(item) => Boolean(session[draftBucket(publicDemo, item.source === "sample")][item.releaseId])}
+              isReady={(item) => Boolean((browserZernio ? connectedDrafts : session[draftBucket(publicDemo, item.source === "sample")])[item.releaseId])}
               generating={action === "generate"}
               onSelect={selectAnnouncement}
-              publicDemo={publicDemo} filterCount={allowedDomains.length} onFilters={() => openInboxSettings()}
+              canFilterEmail={!publicDemo || Boolean(browserZernio)} filterCount={allowedDomains.length} onFilters={() => openInboxSettings()}
               onConnect={() => openConnections("email")} onPaste={() => show("paste")}
               onSample={startSample} onDraft={(item) => void openStudio(item.releaseId, undefined, item)} />}
 
@@ -335,8 +418,16 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
 
       <Dialog open={overlay === "workspace"} onOpenChange={(open) => { if (!open) show(null); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{publicDemo ? "Public demo" : "Demo workspace"}</DialogTitle><DialogDescription>{publicDemo ? "Explore sample releases and rehearse a LinkedIn save." : "Rehearse with sample releases, or work with your connected accounts."}</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{browserZernio ? "Zernio connected" : publicDemo ? "Public demo" : "Demo workspace"}</DialogTitle>
+            <DialogDescription>{browserZernio ? "Your Zernio connection lasts until you reload or disconnect." : "Rehearse with sample releases, or work with your connected accounts."}</DialogDescription>
+          </DialogHeader>
           <div className="overlay-form">
+            {publicDemo ? browserZernio ? <>
+              <Button variant="outline" disabled={action !== null} onClick={() => openConnections("linkedin")}>LinkedIn connections</Button>
+              <Button variant="outline" onClick={() => openInboxSettings()}><Settings2 data-icon="inline-start" />Inbox settings</Button>
+              <Button variant="outline" disabled={action !== null || loadingConnections} onClick={disconnectZernio}>Disconnect Zernio</Button>
+            </> : <Button variant="outline" disabled={action !== null} onClick={() => openZernioKey()}><KeyRound data-icon="inline-start" />Connect Zernio</Button> : null}
             {!publicDemo ? <>
               {sample ? <Button variant="outline" disabled={action !== null} onClick={() => switchWorkspace(false)}>Use my workspace</Button>
                 : <Button variant="outline" disabled={action !== null} onClick={() => switchWorkspace(true)}>Load sample workspace</Button>}
@@ -392,16 +483,23 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
         </DialogContent>
       </Dialog>
 
-      <Dialog open={overlay === "local-email"} onOpenChange={(open) => { if (!open) show(null); }}>
+      <Dialog open={overlay === "zernio-key"} onOpenChange={(open) => { if (!open && action !== "verify-key") show(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import from email</DialogTitle>
-            <DialogDescription>Run Release Voice locally and connect Gmail or Outlook through Zernio to import launch emails by sender domain.</DialogDescription>
+            <DialogTitle>Connect Zernio</DialogTitle>
+            <DialogDescription>Connect a Zernio API key to import launch emails and save LinkedIn drafts. The key stays in this tab and is sent directly to Zernio.</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => show("paste")}>Paste a release link</Button>
-            <Button asChild variant="brand"><a href="https://github.com/SantiagoJimenezQ/release-voice#live-local-mode" target="_blank" rel="noreferrer">Local setup <ExternalLink data-icon="inline-end" /></a></Button>
-          </DialogFooter>
+          <form className="overlay-form" autoComplete="off" onSubmit={(event) => void connectZernio(event)}>
+            <label htmlFor="zernio-key">Zernio API key</label>
+            <Input ref={keyInput} id="zernio-key" type="password" autoComplete="off" autoCapitalize="none" spellCheck={false}
+              maxLength={512} required readOnly={action === "verify-key"} aria-describedby="zernio-key-help" />
+            <p className="overlay-muted" id="zernio-key-help">Use a key with access to your connected accounts. <a href="https://zernio.com/dashboard/api-keys" target="_blank" rel="noreferrer" className="underline">Manage API keys in Zernio</a>.</p>
+            {dialogNotice ? <p className="overlay-muted" role="alert">{dialogNotice}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={action === "verify-key"} onClick={() => show(null)}>Continue in demo</Button>
+              <Button type="submit" variant="brand" disabled={action === "verify-key"}>{action === "verify-key" ? "Checking key…" : "Connect Zernio"}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
