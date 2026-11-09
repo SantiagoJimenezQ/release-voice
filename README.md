@@ -17,7 +17,7 @@ Open http://127.0.0.1:3001. **Demo workspace → Load sample workspace** loads t
 
 ## Public demo on Vercel
 
-Import this repository as a Next.js project with the repository root as the root directory. Keep Vercel’s system environment variables enabled so `VERCEL=1` activates public mode. You can also set `RELEASE_VOICE_MODE=public` in `.env.local` to preview public mode on localhost.
+Import this repository as a Next.js project with the repository root as the root directory. Set `RELEASE_VOICE_MODE=public` in the Vercel project’s deployment environments. This works with automatic system environment exposure disabled. Use the same setting in `.env.local` to preview public mode on localhost.
 
 Public mode starts with sample announcements and simulates LinkedIn saves in the visitor’s tab. With no credentials, it uses labeled prewritten copy. To enable personalized drafting, set these server-side variables in Vercel:
 
@@ -28,7 +28,7 @@ Public mode starts with sample announcements and simulates LinkedIn saves in the
 | `UPSTASH_REDIS_REST_URL` | HTTPS URL for the shared rate limiter |
 | `UPSTASH_REDIS_REST_TOKEN` | Redis REST token with write access |
 
-The limiter reserves up to six generation requests per IP in a ten-minute window and 120 requests across the deployment per UTC day. Only a short-lived keyed hash of the IP is used in the visitor counter. If Redis cannot confirm a reservation, the app returns an error before calling OpenRouter. Public mode blocks live Zernio account discovery, email reads, and draft saves at the API routes.
+The limiter reserves up to six generation requests per ten-minute bucket and 120 requests per UTC day across the deployment. Requests with a verified Vercel IP use a keyed hash in the visitor counter. Other requests use a shared bucket. If Redis cannot confirm a reservation, the app returns an error before calling OpenRouter. Public mode blocks live Zernio account discovery, email reads, and draft saves at the API routes.
 
 ## Live local mode
 

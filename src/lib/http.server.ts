@@ -1,5 +1,7 @@
 import "server-only";
 
+const loopbackHost = /^(127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/;
+
 export class RequestError extends Error {
   constructor(message: string, readonly status = 502) {
     super(message);
@@ -18,9 +20,8 @@ function isSameSite(request: Request) {
 export function requireLocal(request: Request) {
   const host = request.headers.get("host") ?? "";
   const origin = request.headers.get("origin");
-  const loopback = /^(127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/.test(host);
   const sameOrigin = origin === `http://${host}`;
-  if (!loopback || (origin !== null && !sameOrigin)
+  if (!loopbackHost.test(host) || (origin !== null && !sameOrigin)
     || !isSameSite(request)
     || (request.method !== "GET" && !sameOrigin)) {
     throw new RequestError("Use Release Voice from its local browser tab.", 403);
@@ -28,8 +29,8 @@ export function requireLocal(request: Request) {
 }
 
 export function requireGenerationOrigin(request: Request) {
-  if (process.env.VERCEL !== "1") return requireLocal(request);
-  const host = request.headers.get("host");
+  const host = request.headers.get("host") ?? "";
+  if (!isPublicDemo() || loopbackHost.test(host)) return requireLocal(request);
   if (!host || request.headers.get("origin") !== `https://${host}` || !isSameSite(request)) {
     throw new RequestError("Open Release Voice directly to generate drafts.", 403);
   }
