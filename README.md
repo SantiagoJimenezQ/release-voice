@@ -13,7 +13,7 @@ npx --yes pnpm@12.16.1 dev
 
 Open http://127.0.0.1:3001. The landing page shows how one launch email becomes two drafts. **Try a sample release** opens Post approvals in the Launch inbox. Choose **Create drafts** under the release preview to open the Writing Studio. It opens the recommended angle for the release and gives a short reason below the tabs. Each angle shows editable LinkedIn and X cards. The first tab holds the original draft pair. The other two are labeled samples based on the release.
 
-Choose **Check source** on either card to read the release excerpts for that angle in the side panel, with a link to the full Zernio article. Choose **Schedule** to use the suggested slot or **Change** its date, time, and time zone. Each platform and angle has its own slot. **Content calendar → Rehearsed schedules** lists those entries and links back to the exact angle. Rehearsed schedules and draft saves stay in the browser tab.
+Choose **Check source** on either card to read the release excerpts for that angle in the side panel, with a link to the full Zernio article. Choose **Schedule** to use the suggested slot or **Change** its date, time, and time zone. Each platform and angle has its own slot. The **Content calendar** shows each rehearsal on its scheduled date, including weekends. Open an entry to focus that platform and angle in Writing Studio. Rehearsed schedules and draft saves stay in the browser tab.
 
 **How it works** opens the [engineering design article](http://127.0.0.1:3001/how-it-works) with diagrams of the service boundaries and draft save flow.
 

@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { z } from "zod";
 import { announcementSchema, releaseIdSchema, senderDomainsSchema, writingInstructionsSchema } from "./contracts";
 import { releaseIds, type ReleaseId } from "./releases";
-import { draftAngles, draftStateSchema, type DraftAngle } from "./studio-drafts";
+import { draftAngles, draftStateSchema, rehearsalFieldsSchema, type Channel, type DraftAngle } from "./studio-drafts";
 
 export type { DraftState } from "./studio-drafts";
 
@@ -24,7 +24,10 @@ const workspaceSchema = z.object({
 });
 
 export type Session = z.infer<typeof workspaceSchema>;
-export type View = { page: "home" | "inbox" | "calendar" | "drafts" } | { page: "studio"; releaseId: ReleaseId; angle?: DraftAngle };
+export type View =
+  | { page: "home" | "inbox" | "drafts" }
+  | { page: "calendar"; date?: string }
+  | { page: "studio"; releaseId: ReleaseId; angle?: DraftAngle; channel?: Channel };
 
 const empty: Session = { sample: false, imported: [], drafts: {}, sampleDrafts: {}, publicDrafts: {}, writingSample: "", writingInstructions: "" };
 const serverSnapshot = () => initial;
@@ -98,17 +101,26 @@ const watchHash = (listener: () => void) => {
 export function useView(): View {
   const hash = useSyncExternalStore(watchHash, () => window.location.hash, serverSnapshot).slice(1);
   if (!hash || hash === "home") return { page: "home" };
-  if (hash === "calendar" || hash === "drafts") return { page: hash };
-  const [page, release, angle, extra] = hash.split("/");
+  if (hash === "drafts") return { page: "drafts" };
+  const [page, release, angle, channel, extra] = hash.split("/");
+  if (page === "calendar" && angle === undefined) {
+    return { page: "calendar", date: rehearsalFieldsSchema.shape.date.safeParse(release).data };
+  }
   const id = releaseIds.find((releaseId) => releaseId === release);
   const selected = draftAngles.find((draftAngle) => draftAngle === angle);
-  return page === "studio" && id && extra === undefined && (angle === undefined || selected)
-    ? { page: "studio", releaseId: id, angle: selected } : { page: "inbox" };
+  const selectedChannel = channel === "linkedin" || channel === "x" ? channel : undefined;
+  return page === "studio" && id && extra === undefined && (angle === undefined || selected) && (channel === undefined || selectedChannel)
+    ? { page: "studio", releaseId: id, angle: selected, channel: selectedChannel } : { page: "inbox" };
 }
-export function studioHref(id: ReleaseId, angle?: DraftAngle) {
-  return `#studio/${id}${angle ? `/${angle}` : ""}`;
+export function studioHref(id: ReleaseId, angle?: DraftAngle, channel?: Channel) {
+  return angle ? `#studio/${id}/${angle}${channel ? `/${channel}` : ""}` : `#studio/${id}`;
+}
+export function calendarHref(date?: string) {
+  return date ? `#calendar/${date}` : "#calendar";
 }
 export function goTo(view: View, scroll = true) {
-  window.location.hash = view.page === "studio" ? studioHref(view.releaseId, view.angle) : view.page;
+  if (view.page === "studio") window.location.hash = studioHref(view.releaseId, view.angle, view.channel);
+  else if (view.page === "calendar") window.location.hash = calendarHref(view.date);
+  else window.location.hash = view.page;
   if (scroll) window.scrollTo(0, 0);
 }

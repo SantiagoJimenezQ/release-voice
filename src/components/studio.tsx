@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ChannelIcon } from "./chrome";
 import { releaseExcerpts } from "@/lib/release-excerpts";
 import { releases, type ReleaseId } from "@/lib/releases";
+import { calendarHref } from "@/lib/session";
 import {
   angleDraft, angleTitle, defaultRehearsal, draftAngles, formatRehearsal, formatRehearsalDate, recommendedAngles, rehearsalFieldsSchema, rehearsalTimeZones,
   type Channel, type DraftAngle, type DraftState, type DraftVariant, type RehearsalFields,
@@ -21,6 +22,7 @@ type PanelKind = "schedule" | "source";
 type Props = {
   id: ReleaseId;
   angle: DraftAngle;
+  focusChannel?: Channel;
   draft: DraftState;
   author: string;
   account?: string;
@@ -34,7 +36,7 @@ type Props = {
   onSchedule: (channel: Channel, fields: RehearsalFields) => void;
 };
 
-export function Studio({ id, angle, draft, author, account, sample, saving, onAngleChange, onEdit, onSource, onEmail, onSave, onSchedule }: Props) {
+export function Studio({ id, angle, focusChannel, draft, author, account, sample, saving, onAngleChange, onEdit, onSource, onEmail, onSave, onSchedule }: Props) {
   const [editing, setEditing] = useState<Channel | null>(null);
   const [panel, setPanel] = useState<{ kind: PanelKind; angle: DraftAngle; channel: Channel } | null>(null);
   const panelTrigger = useRef<HTMLButtonElement | null>(null);
@@ -95,7 +97,7 @@ export function Studio({ id, angle, draft, author, account, sample, saving, onAn
               <div className="studio-cards">
                 {(["linkedin", "x"] as const).map((channel) => <DraftCard key={channel}
                   channel={channel} draft={current} author={channel === "linkedin" ? account ?? author : author}
-                  sample={sample} example={example} editing={editing === channel} saving={saving}
+                  sample={sample} example={example} editing={editing === channel} saving={saving} focused={focusChannel === channel}
                   activePanel={activePanel?.channel === channel ? activePanel.kind : undefined}
                   onToggleEdit={() => setEditing(editing === channel ? null : channel)}
                   onEdit={(content) => onEdit(channel, content)}
@@ -139,7 +141,7 @@ function canScheduleDraft(channel: Channel, content: string) {
   return Boolean(content.trim()) && content.length <= draftLimits[channel];
 }
 
-function DraftCard({ channel, draft, author, sample, example, editing, activePanel, saving, onToggleEdit, onEdit, onCheckSource, onSchedule }: {
+function DraftCard({ channel, draft, author, sample, example, editing, activePanel, saving, focused, onToggleEdit, onEdit, onCheckSource, onSchedule }: {
   channel: Channel;
   draft: DraftVariant;
   author: string;
@@ -148,6 +150,7 @@ function DraftCard({ channel, draft, author, sample, example, editing, activePan
   editing: boolean;
   activePanel?: PanelKind;
   saving: boolean;
+  focused: boolean;
   onToggleEdit: () => void;
   onEdit: (value: string) => void;
   onCheckSource: (event: MouseEvent<HTMLButtonElement>) => void;
@@ -158,10 +161,20 @@ function DraftCard({ channel, draft, author, sample, example, editing, activePan
   const max = draftLimits[channel];
   const saved = channel === "linkedin" && Boolean(draft.receipt);
   const schedule = draft.schedules?.[channel];
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (!focused) return;
+    headingRef.current?.focus({ preventScroll: true });
+    headingRef.current?.scrollIntoView({ block: "nearest" });
+  }, [focused]);
+
   return (
     <section className="draft-platform" aria-labelledby={`${channel}-heading`}>
-      <div className="channel-header"><ChannelIcon channel={label} /><h2 id={`${channel}-heading`}>{label}</h2></div>
-      <article className="draft-card" data-selected={Boolean(activePanel) || undefined}>
+      <div className="channel-header">
+        <ChannelIcon channel={label} /><h2 id={`${channel}-heading`} ref={headingRef} tabIndex={focused ? -1 : undefined}>{label}</h2>
+      </div>
+      <article className="draft-card" data-selected={Boolean(activePanel) || focused || undefined}>
         <div className="draft-person">
           <span className="avatar draft-avatar" aria-hidden="true"><UserRound /></span>
           <div className="draft-identity">
@@ -176,7 +189,7 @@ function DraftCard({ channel, draft, author, sample, example, editing, activePan
         {schedule ? <div className="draft-scheduled" role="status">
           <Badge variant="outline"><CalendarDays data-icon="inline-start" />Scheduled in rehearsal</Badge>
           <span>{formatRehearsal(schedule)}</span>
-          <a href="#calendar">View calendar</a>
+          <a href={calendarHref(schedule.date)}>View calendar</a>
         </div> : null}
         <div className="draft-card-footer">
           <div className="draft-card-meta">

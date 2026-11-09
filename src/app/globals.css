@@ -266,12 +266,6 @@ svg { flex: none; }
 .schedule-summary p:first-of-type { margin: 3px 0 1px; font-size: 16px; font-weight: 650; }
 .schedule-summary button { align-self: center; margin-left: auto; }
 .schedule-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.rehearsal-list { margin-top: 9px; border: 1px solid var(--line); border-radius: 10px; }
-.rehearsal-list li, .rehearsal-entry { display: flex; align-items: center; gap: 10px; }
-.rehearsal-list li { justify-content: space-between; flex-wrap: wrap; padding: 12px; }
-.rehearsal-list li + li { border-top: 1px solid var(--line); }
-.rehearsal-list h3 { font-size: 15px; font-weight: 650; }
-.rehearsal-list p { color: var(--muted); font-size: 14px; }
 
 @media (min-width: 1050px) {
   .studio-workspace-with-panel { grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 460px); }
@@ -290,21 +284,23 @@ svg { flex: none; }
 .calendar-surface .page-heading, .saved-surface .page-heading { border: 0; padding-bottom: 0; margin-bottom: 24px; }
 .week-controls { display: flex; align-items: center; gap: 7px; white-space: nowrap; padding-top: 6px; }
 .week-controls > span { padding: 6px 11px; font-size: 14px; border: 1px solid var(--line); border-radius: 7px; background: #fafafa; }
-.plan-label { margin-bottom: 10px; }
-.week-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .day-cell { min-height: 205px; min-width: 0; }
 .day-cell + .day-cell { border-left: 1px solid var(--line); }
 .day-cell > h2 { border-bottom: 1px solid var(--line); background: #fafafa; padding: 9px 13px; font-size: 15px; font-weight: 650; }
-.plan-card { margin: 10px; border: 1px solid var(--line); background: #f8f8f8; border-radius: 8px; padding: 11px; overflow-wrap: anywhere; }
+.calendar-day-entries { display: grid; gap: 8px; padding: 8px; }
+.calendar-day-entries:empty { padding: 0; }
+.plan-card { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 9px; overflow-wrap: anywhere; }
 .plan-card h3 { font-size: 16px; font-weight: 650; line-height: 1.25; }
-.plan-featured { background: var(--coral-tint); border-color: #f2b4a7; }
-.plan-channels { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
-.plan-channels [data-slot="badge"] { background: white; }
-.plan-channels .channel-icon { width: 13px; height: 13px; border-radius: 2px; }
-.plan-card p { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; line-height: 1.3; }
-.plan-card p svg { width: 13px; height: 13px; }
-.plan-action { margin-top: 8px; }
-.plan-featured .plan-action { width: 100%; }
+.plan-card > [data-slot="badge"] { margin-bottom: 6px; }
+.plan-suggested { border-style: dashed; background: #fafafa; }
+.plan-rehearsed { border-inline-start: 3px solid var(--brand); background: var(--background); }
+.plan-rehearsed:hover { background: var(--coral-tint); }
+.plan-rehearsed p { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.35; }
+.plan-channels { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.plan-platform { display: flex; align-items: center; gap: 5px; }
+.plan-card .channel-icon { width: 13px; height: 13px; border-radius: 2px; }
+.plan-action[data-slot="button"] { margin-top: 4px; padding-inline: 0; }
 .plan-reasons { margin-top: 31px; }
 .plan-reasons > h2 { font-size: 25px; font-weight: 670; letter-spacing: -.042em; margin-bottom: 12px; }
 .reason-table { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
@@ -339,6 +335,13 @@ svg { flex: none; }
   .release-link:hover { background: #f4f4f4; }
 }
 
+@media (max-width: 1020px) {
+  .week-grid { grid-template-columns: 1fr; }
+  .day-cell { display: grid; grid-template-columns: 75px minmax(0, 1fr); min-height: 41px; }
+  .day-cell + .day-cell { border-left: 0; border-top: 1px solid var(--line); }
+  .day-cell > h2 { border-bottom: 0; font-size: 14px; }
+}
+
 @media (max-width: 900px) {
   .topbar { padding-inline: 19px; gap: 13px; }
   .landing-header { padding-inline: 24px; }
@@ -349,7 +352,6 @@ svg { flex: none; }
   .topbar-end { gap: 8px; }
   .surface { padding-inline: 24px; }
   .studio { width: calc(100% - 48px); }
-  .plan-card { margin: 6px; padding: 7px; }
   .plan-card h3 { font-size: 14px; }
   .welcome-grid { gap: 22px; }
   .inbox-action > button { margin-left: auto; }
@@ -396,12 +398,6 @@ svg { flex: none; }
   .studio-footer > button { width: 100%; }
   .save-receipt { flex-wrap: wrap; }
   .save-receipt > a { margin-left: 0; width: 100%; }
-  .week-grid { grid-template-columns: 1fr; }
-  .day-cell { display: grid; grid-template-columns: 75px 1fr; min-height: 41px; }
-  .day-cell + .day-cell { border-left: 0; border-top: 1px solid var(--line); }
-  .day-cell > h2 { border-bottom: 0; font-size: 14px; }
-  .plan-card { margin: 6px; }
-  .plan-featured .plan-action { width: auto; }
   .reason-table td, .reason-table th { padding: 8px 7px; white-space: normal; }
   .reason-table td [data-slot="badge"] { white-space: normal; height: auto; }
   .saved-channel { grid-template-columns: 1fr; gap: 7px; padding: 12px; }

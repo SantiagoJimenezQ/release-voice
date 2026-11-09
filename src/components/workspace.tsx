@@ -268,13 +268,14 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
       {notice ? <p className="notice" role="status">{notice}</p> : null}
       {studioId && draft && variant ? (
         <Studio key={`${draftKey}/${studioId}`} id={studioId} angle={studioAngle} draft={draft}
+          focusChannel={view.page === "studio" ? view.channel : undefined}
           author={sample ? "Alex Rivera" : (variant.receipt?.account || target?.label || "Your workspace")}
           account={sample ? undefined : variant.receipt?.account ?? target?.label} sample={sample} saving={action === "save"}
           onAngleChange={(angle) => goTo({ page: "studio", releaseId: studioId, angle }, false)}
           onEdit={(channel, value) => changeDraft(studioId, studioAngle, (current) => busy.current ? current : ({ ...current, [channel]: value }))}
           onSource={() => show("source")} onEmail={() => show("email")} onSave={() => void saveDraft(studioId, studioAngle, variant)}
           onSchedule={(channel, fields) => scheduleDraft(studioId, studioAngle, channel, fields)} />
-      ) : displayed.page === "calendar" ? <Calendar items={items} drafts={drafts} busy={action === "generate"} onDraft={(id, angle) => void openStudio(id, angle)} />
+      ) : displayed.page === "calendar" ? <Calendar items={items} drafts={drafts} date={displayed.date} busy={action === "generate"} onDraft={(id, angle) => void openStudio(id, angle)} />
         : displayed.page === "drafts" ? <SavedDrafts drafts={drafts} sample={sample} />
           : showWelcome ? <Welcome publicDemo={publicDemo} onSample={startSample} onConnect={() => openConnections("email")} onPaste={() => show("paste")} />
           : <Inbox items={items} selected={selected} sample={sample}

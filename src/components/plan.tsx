@@ -1,29 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChannelIcon } from "./chrome";
 import { releaseIds, releases, type Announcement, type ReleaseId } from "@/lib/releases";
-import { studioHref } from "@/lib/session";
-import { angleDraft, angleTitle, demoDate, draftAngles, formatRehearsal, type DraftAngle, type DraftState } from "@/lib/studio-drafts";
+import { goTo, studioHref } from "@/lib/session";
+import { angleDraft, angleTitle, demoDate, draftAngles, type DraftAngle, type DraftState } from "@/lib/studio-drafts";
 
-const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const weekMs = 7 * 24 * 60 * 60 * 1000;
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const dayFormat = new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" });
 
-export function Calendar({ items, drafts, busy, onDraft }: {
+function dateKey(date: Date) {
+  return date.toISOString().split("T")[0];
+}
+
+export function Calendar({ items, drafts, date, busy, onDraft }: {
   items: Announcement[];
   drafts: Partial<Record<ReleaseId, DraftState>>;
+  date?: string;
   busy: boolean;
   onDraft: (id: ReleaseId, angle?: DraftAngle) => void;
 }) {
-  const [week, setWeek] = useState(0);
+  const week = date ? Math.floor((Date.parse(`${date}T00:00:00Z`) - demoDate(0).getTime()) / weekMs) : 0;
+  const previousWeek = demoDate(0, week - 1);
+  const nextWeek = demoDate(0, week + 1);
   const suggested = items.filter((item) => releases[item.releaseId].day !== null);
-  const featured = suggested.find((item) => item.releaseId === "approvals") ?? suggested[0];
-  const range = week === 0 ? "Nov 9–13, 2026" : `${dateFormat.format(demoDate(0, week))} – ${dateFormat.format(demoDate(4, week))}`;
+  const range = dateFormat.formatRange(demoDate(0, week), demoDate(6, week));
   const rehearsals = releaseIds.flatMap((id) => {
     const draft = drafts[id];
     if (!draft) return [];
@@ -34,58 +40,54 @@ export function Calendar({ items, drafts, busy, onDraft }: {
         return schedule ? [{ id, angle, channel, schedule, title: angleTitle(id, angle, draft) }] : [];
       });
     });
-  }).sort((a, b) => a.schedule.date.localeCompare(b.schedule.date) || a.schedule.time.localeCompare(b.schedule.time));
-  const caption = items.length === 3 && suggested.length === 2
-    ? "Two suggested stories from three releases"
-    : items.length > 0
-      ? `${suggested.length} suggested ${suggested.length === 1 ? "story" : "stories"} from ${items.length} ${items.length === 1 ? "release" : "releases"}`
-      : "A suggested plan appears when you add a release.";
+  }).sort((a, b) => a.schedule.time.localeCompare(b.schedule.time));
+
   return (
     <main className="surface calendar-surface">
       <header className="page-heading">
-        <div><h1>Content calendar</h1><p>{caption}</p></div>
+        <div><h1>Content calendar</h1><p>Suggested slots and drafts scheduled in rehearsal.</p></div>
         <div className="week-controls">
-          <Button variant="outline" size="icon" aria-label="Previous week" onClick={() => setWeek(week - 1)}><ChevronLeft /></Button>
-          <span>{range}</span>
-          <Button variant="outline" size="icon" aria-label="Next week" onClick={() => setWeek(week + 1)}><ChevronRight /></Button>
+          <Button variant="outline" size="icon" aria-label="Previous week" disabled={previousWeek.getUTCFullYear() < 1}
+            onClick={() => goTo({ page: "calendar", date: dateKey(previousWeek) }, false)}><ChevronLeft /></Button>
+          <span aria-live="polite">{range}</span>
+          <Button variant="outline" size="icon" aria-label="Next week" disabled={nextWeek.getUTCFullYear() > 9999}
+            onClick={() => goTo({ page: "calendar", date: dateKey(nextWeek) }, false)}><ChevronRight /></Button>
         </div>
       </header>
-      <Badge variant="secondary" className="plan-label">Suggested plan</Badge>
-      <section className="week-grid" aria-label="Suggested posting dates">
+      <section className="week-grid" aria-label="Weekly content calendar">
         {weekdays.map((day, index) => {
-          const date = demoDate(index, week);
+          const dayDate = demoDate(index, week);
           const item = week === 0 ? suggested.find((entry) => releases[entry.releaseId].day === index) : undefined;
           const draft = item ? drafts[item.releaseId] : undefined;
-          const active = item?.releaseId === featured?.releaseId && item !== undefined;
+          const scheduled = rehearsals.filter(({ schedule }) => schedule.date === dateKey(dayDate));
+
           return <div key={day} className="day-cell">
-            <h2>{day} {dayFormat.format(date)}</h2>
-            {item ? <article className={active ? "plan-card plan-featured" : "plan-card"}>
-              <h3>{releases[item.releaseId].title}</h3>
-              <div className="plan-channels"><Badge variant="outline"><ChannelIcon channel="LinkedIn" />LinkedIn</Badge><Badge variant="outline"><ChannelIcon channel="X" />X</Badge></div>
-              <p><CalendarDays aria-hidden="true" /> Suggested date: {dateFormat.format(date)}</p>
-              <Button disabled={busy} variant={active ? "brand" : "link"} className="plan-action" onClick={() => onDraft(item.releaseId, draft?.receipt ? "original" : undefined)}>
-                {draft ? (draft.receipt ? "View saved draft" : "Review drafts") : "Create drafts"}
-                {active ? <ArrowRight data-icon="inline-end" /> : null}
-              </Button>
-            </article> : null}
+            <h2><time dateTime={dateKey(dayDate)}>{day} {dayFormat.format(dayDate)}</time></h2>
+            <div className="calendar-day-entries">
+              {scheduled.map(({ id, angle, channel, schedule, title }) => {
+                const platform = channel === "linkedin" ? "LinkedIn" : "X";
+                return (
+                  <a key={`${id}/${angle}/${channel}`} className="plan-card plan-rehearsed" href={studioHref(id, angle, channel)}>
+                    <Badge variant="secondary">Rehearsed</Badge>
+                    <h3>{releases[id].title}</h3>
+                    <p>{title}</p>
+                    <p className="plan-platform"><ChannelIcon channel={platform} />{platform}</p>
+                    <p><time dateTime={`${schedule.date}T${schedule.time}`}>{schedule.time}</time> · {schedule.timeZone}</p>
+                  </a>
+                );
+              })}
+              {item ? <article className="plan-card plan-suggested">
+                <Badge variant="outline"><CalendarDays data-icon="inline-start" />Suggested</Badge>
+                <h3>{releases[item.releaseId].title}</h3>
+                <div className="plan-channels"><Badge variant="outline"><ChannelIcon channel="LinkedIn" />LinkedIn</Badge><Badge variant="outline"><ChannelIcon channel="X" />X</Badge></div>
+                <Button disabled={busy} variant="link" className="plan-action" onClick={() => onDraft(item.releaseId, draft?.receipt ? "original" : undefined)}>
+                  {draft ? (draft.receipt ? "View saved draft" : "Review drafts") : "Create drafts"}
+                </Button>
+              </article> : null}
+            </div>
           </div>;
         })}
       </section>
-      {rehearsals.length ? <section className="plan-reasons" aria-labelledby="rehearsed-schedules">
-        <h2 id="rehearsed-schedules">Rehearsed schedules</h2>
-        <ul className="rehearsal-list">
-          {rehearsals.map(({ id, angle, channel, schedule, title }) => {
-            const platform = channel === "linkedin" ? "LinkedIn" : "X";
-            return <li key={`${id}/${angle}/${channel}`}>
-              <div className="rehearsal-entry"><ChannelIcon channel={platform} /><div>
-                <h3>{releases[id].title} · {title}</h3>
-                <p>{platform} · {formatRehearsal(schedule)}</p>
-              </div></div>
-              <Button asChild variant="outline"><a href={studioHref(id, angle)}>Review drafts</a></Button>
-            </li>;
-          })}
-        </ul>
-      </section> : null}
       {week === 0 && items.length > 0 ? <section className="plan-reasons">
         <h2>Why these stories</h2>
         <div className="reason-table">
