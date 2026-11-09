@@ -6,26 +6,35 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChannelIcon } from "./chrome";
-import { releases, type Announcement, type ReleaseId } from "@/lib/releases";
-import type { DraftState } from "@/lib/session";
+import { releaseIds, releases, type Announcement, type ReleaseId } from "@/lib/releases";
+import { studioHref } from "@/lib/session";
+import { angleDraft, angleTitle, demoDate, draftAngles, formatRehearsal, type DraftAngle, type DraftState } from "@/lib/studio-drafts";
 
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const dayFormat = new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" });
-function dayDate(index: number, week: number) {
-  return new Date(Date.UTC(2026, 10, 9 + index + week * 7));
-}
 
 export function Calendar({ items, drafts, busy, onDraft }: {
   items: Announcement[];
   drafts: Partial<Record<ReleaseId, DraftState>>;
   busy: boolean;
-  onDraft: (id: ReleaseId) => void;
+  onDraft: (id: ReleaseId, angle?: DraftAngle) => void;
 }) {
   const [week, setWeek] = useState(0);
   const suggested = items.filter((item) => releases[item.releaseId].day !== null);
   const featured = suggested.find((item) => item.releaseId === "approvals") ?? suggested[0];
-  const range = week === 0 ? "Nov 9–13, 2026" : `${dateFormat.format(dayDate(0, week))} – ${dateFormat.format(dayDate(4, week))}`;
+  const range = week === 0 ? "Nov 9–13, 2026" : `${dateFormat.format(demoDate(0, week))} – ${dateFormat.format(demoDate(4, week))}`;
+  const rehearsals = releaseIds.flatMap((id) => {
+    const draft = drafts[id];
+    if (!draft) return [];
+    return draftAngles.flatMap((angle) => {
+      const schedules = angleDraft(id, angle, draft).schedules;
+      return (["linkedin", "x"] as const).flatMap((channel) => {
+        const schedule = schedules?.[channel];
+        return schedule ? [{ id, angle, channel, schedule, title: angleTitle(id, angle, draft) }] : [];
+      });
+    });
+  }).sort((a, b) => a.schedule.date.localeCompare(b.schedule.date) || a.schedule.time.localeCompare(b.schedule.time));
   const caption = items.length === 3 && suggested.length === 2
     ? "Two suggested stories from three releases"
     : items.length > 0
@@ -44,7 +53,7 @@ export function Calendar({ items, drafts, busy, onDraft }: {
       <Badge variant="secondary" className="plan-label">Suggested plan</Badge>
       <section className="week-grid" aria-label="Suggested posting dates">
         {weekdays.map((day, index) => {
-          const date = dayDate(index, week);
+          const date = demoDate(index, week);
           const item = week === 0 ? suggested.find((entry) => releases[entry.releaseId].day === index) : undefined;
           const draft = item ? drafts[item.releaseId] : undefined;
           const active = item?.releaseId === featured?.releaseId && item !== undefined;
@@ -54,7 +63,7 @@ export function Calendar({ items, drafts, busy, onDraft }: {
               <h3>{releases[item.releaseId].title}</h3>
               <div className="plan-channels"><Badge variant="outline"><ChannelIcon channel="LinkedIn" />LinkedIn</Badge><Badge variant="outline"><ChannelIcon channel="X" />X</Badge></div>
               <p><CalendarDays aria-hidden="true" /> Suggested date: {dateFormat.format(date)}</p>
-              <Button disabled={busy} variant={active ? "brand" : "link"} className="plan-action" onClick={() => onDraft(item.releaseId)}>
+              <Button disabled={busy} variant={active ? "brand" : "link"} className="plan-action" onClick={() => onDraft(item.releaseId, draft?.receipt ? "original" : undefined)}>
                 {draft ? (draft.receipt ? "View saved draft" : "Review drafts") : "Create drafts"}
                 {active ? <ArrowRight data-icon="inline-end" /> : null}
               </Button>
@@ -62,6 +71,21 @@ export function Calendar({ items, drafts, busy, onDraft }: {
           </div>;
         })}
       </section>
+      {rehearsals.length ? <section className="plan-reasons" aria-labelledby="rehearsed-schedules">
+        <h2 id="rehearsed-schedules">Rehearsed schedules</h2>
+        <ul className="rehearsal-list">
+          {rehearsals.map(({ id, angle, channel, schedule, title }) => {
+            const platform = channel === "linkedin" ? "LinkedIn" : "X";
+            return <li key={`${id}/${angle}/${channel}`}>
+              <div className="rehearsal-entry"><ChannelIcon channel={platform} /><div>
+                <h3>{releases[id].title} · {title}</h3>
+                <p>{platform} · {formatRehearsal(schedule)}</p>
+              </div></div>
+              <Button asChild variant="outline"><a href={studioHref(id, angle)}>Review drafts</a></Button>
+            </li>;
+          })}
+        </ul>
+      </section> : null}
       {week === 0 && items.length > 0 ? <section className="plan-reasons">
         <h2>Why these stories</h2>
         <div className="reason-table">

@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, ChevronDown, FileText, Inbox } from "lucide-react";
+import { CalendarDays, ChevronDown, ExternalLink, FileText, Inbox } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { View } from "@/lib/session";
@@ -11,13 +12,44 @@ const navigation = [
   { label: "Saved drafts", page: "drafts", Icon: FileText },
 ] as const;
 
+function Wordmark() {
+  return (
+    <a href="#home" className="wordmark">
+      <span className="brand-icon" aria-hidden="true" />
+      Release Voice
+    </a>
+  );
+}
+
+export function HowItWorksLink() {
+  return (
+    <Button asChild variant="ghost" className="ui-button">
+      <Link id="how-it-works" href="/how-it-works" target="_blank" rel="noopener">
+        How it works <ExternalLink data-icon="inline-end" aria-hidden="true" />
+        <span className="sr-only"> (opens in a new tab)</span>
+      </Link>
+    </Button>
+  );
+}
+
+export function LandingHeader() {
+  return (
+    <header className="landing-header">
+      <Wordmark />
+      <nav aria-label="Release Voice" className="button-row">
+        <HowItWorksLink />
+        <Button asChild variant="outline" className="ui-button">
+          <a href="#inbox"><Inbox data-icon="inline-start" aria-hidden="true" />Open inbox</a>
+        </Button>
+      </nav>
+    </header>
+  );
+}
+
 export function Topbar({ view, sample, publicDemo, openWorkspace }: { view: View; sample: boolean; publicDemo: boolean; openWorkspace: () => void }) {
   return (
     <header className="topbar">
-      <a href="#inbox" className="wordmark">
-        <span className="brand-icon" aria-hidden="true" />
-        Release Voice
-      </a>
+      <Wordmark />
       <nav aria-label="Workspace" className="topnav">
         {navigation.map(({ page, label, Icon }) => {
           const current = view.page === page || (page === "inbox" && view.page === "studio");

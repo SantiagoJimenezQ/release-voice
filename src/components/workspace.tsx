@@ -11,9 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { request } from "@/lib/client";
 import { announcementSchema, connectionsSchema, draftResponseSchema, receiptSchema, senderDomainsSchema, writingInstructionsLimit, type Connections, type Receipt } from "@/lib/contracts";
 import { matchRelease, releases, sampleAnnouncements, type Announcement, type ReleaseId } from "@/lib/releases";
-import { goTo, saveSenderDomains, updateSession, useSenderDomains, useSession, useView, type DraftState } from "@/lib/session";
-import { Topbar } from "./chrome";
+import { goTo, saveSenderDomains, updateSession, useSenderDomains, useSession, useView } from "@/lib/session";
+import { angleDraft, recommendedAngles, rehearsalFieldsSchema, updateAngleDraft, type Channel, type DraftAngle, type DraftVariant, type RehearsalFields } from "@/lib/studio-drafts";
+import { LandingHeader, Topbar } from "./chrome";
 import { AnnouncementBody, Inbox } from "./inbox";
+import { Welcome } from "./welcome";
 import { Calendar } from "./plan";
 import { SavedDrafts } from "./saved-drafts";
 import { Studio } from "./studio";
@@ -52,7 +54,9 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   ).values()];
   const selected = items.find((item) => item.releaseId === (session.selected ?? (publicDemo ? "approvals" : undefined))) ?? items[0];
   const studioId = view.page === "studio" ? view.releaseId : undefined;
+  const studioAngle = view.page === "studio" ? view.angle ?? recommendedAngles[view.releaseId].angle : "original";
   const draft = studioId ? drafts[studioId] : undefined;
+  const variant = studioId && draft ? angleDraft(studioId, studioAngle, draft) : undefined;
   const studioItem = studioId ? items.find((item) => item.releaseId === studioId) ?? linkAnnouncement(studioId) : undefined;
   const target = connections.linkedin.find((item) => item.id === targetId) ?? (
     connections.linkedin.length === 1 ? connections.linkedin[0] : undefined
@@ -159,11 +163,11 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     }
   }
 
-  async function openStudio(id: ReleaseId) {
+  async function openStudio(id: ReleaseId, angle?: DraftAngle) {
     if (busy.current) return;
     setNotice("");
     if (drafts[id]) {
-      goTo({ page: "studio", releaseId: id });
+      goTo({ page: "studio", releaseId: id, angle });
       return;
     }
     busy.current = true;
@@ -186,7 +190,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
           writingSample: generated.source === "model" && writingSample ? writingSample : undefined,
         } },
       }));
-      goTo({ page: "studio", releaseId: id });
+      goTo({ page: "studio", releaseId: id, angle });
     } catch (error) {
       setNotice(message(error));
     } finally {
@@ -195,20 +199,30 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     }
   }
 
-  function changeDraft(id: ReleaseId, update: (current: DraftState) => DraftState) {
+  function changeDraft(id: ReleaseId, angle: DraftAngle, update: (current: DraftVariant) => DraftVariant) {
     updateSession((current) => {
       const old = current[draftKey][id];
-      return old ? { ...current, [draftKey]: { ...current[draftKey], [id]: update(old) } } : current;
+      return old ? { ...current, [draftKey]: { ...current[draftKey], [id]: updateAngleDraft(id, angle, old, update) } } : current;
     });
   }
 
-  async function saveDraft(id: ReleaseId, draft: DraftState) {
+  function scheduleDraft(id: ReleaseId, angle: DraftAngle, channel: Channel, fields: RehearsalFields) {
+    const parsed = rehearsalFieldsSchema.safeParse(fields);
+    if (!parsed.success) return;
+    changeDraft(id, angle, (current) => {
+      const content = current[channel].trim();
+      if (!content || content.length > (channel === "x" ? 280 : 3000)) return current;
+      return { ...current, schedules: { ...current.schedules, [channel]: { ...parsed.data, content } } };
+    });
+  }
+
+  async function saveDraft(id: ReleaseId, angle: DraftAngle, draft: DraftVariant) {
     const content = draft.linkedin.trim();
     if (busy.current || draft.receipt || !content) return;
     setNotice("");
     if (sample) {
       const receipt: Receipt = { mode: "sample", status: "draft", content, account: "Alex Rivera", postId: crypto.randomUUID() };
-      changeDraft(id, (current) => ({ ...current, receipt }));
+      changeDraft(id, angle, (current) => ({ ...current, receipt }));
       return;
     }
     if (!target) {
@@ -220,11 +234,11 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     const previous = draft.attempt;
     const attempt = previous?.accountId === target.id && previous.content === content
       ? previous : { requestId: crypto.randomUUID(), accountId: target.id, content };
-    changeDraft(id, (current) => ({ ...current, attempt }));
+    changeDraft(id, angle, (current) => ({ ...current, attempt }));
     try {
       const receipt = await request("/api/linkedin-draft", receiptSchema, attempt);
       if (receipt.mode !== "zernio") throw new Error("A live Zernio receipt is required.");
-      changeDraft(id, (current) => ({ ...current, receipt }));
+      changeDraft(id, angle, (current) => ({ ...current, receipt }));
     } catch (error) {
       setNotice(message(error));
     } finally {
@@ -234,26 +248,41 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   const source = studioId ? releases[studioId].sample : undefined;
-  const displayed = view.page === "studio" && !draft ? { page: "inbox" as const } : view;
+  const displayed = view.page === "home" || (view.page === "studio" && !draft) ? { page: "inbox" as const } : view;
+  const showWelcome = view.page === "home";
+
+  function startSample() {
+    if (publicDemo) {
+      updateSession((current) => ({ ...current, selected: "approvals" }));
+      goTo({ page: "inbox" });
+    } else {
+      switchWorkspace(true);
+    }
+  }
 
   return (
     <>
-      <Topbar view={displayed} sample={sample} publicDemo={publicDemo} openWorkspace={() => show("workspace")} />
+      {showWelcome ? <LandingHeader /> : (
+        <Topbar view={displayed} sample={sample} publicDemo={publicDemo} openWorkspace={() => show("workspace")} />
+      )}
       {notice ? <p className="notice" role="status">{notice}</p> : null}
-      {studioId && draft ? (
-        <Studio key={`${draftKey}/${studioId}`} id={studioId} draft={draft}
-          author={sample ? "Alex Rivera" : (target?.label || draft.receipt?.account || "Your workspace")}
-          account={draft.receipt?.account ?? target?.label} sample={sample} saving={action === "save"}
-          onEdit={(channel, value) => changeDraft(studioId, (current) => action === "save" ? current : ({ ...current, [channel]: value }))}
-          onSource={() => show("source")} onEmail={() => show("email")} onSave={() => void saveDraft(studioId, draft)}
-          onConnect={() => openConnections("linkedin")} />
-      ) : displayed.page === "calendar" ? <Calendar items={items} drafts={drafts} busy={action === "generate"} onDraft={(id) => void openStudio(id)} />
+      {studioId && draft && variant ? (
+        <Studio key={`${draftKey}/${studioId}`} id={studioId} angle={studioAngle} draft={draft}
+          author={sample ? "Alex Rivera" : (variant.receipt?.account || target?.label || "Your workspace")}
+          account={sample ? undefined : variant.receipt?.account ?? target?.label} sample={sample} saving={action === "save"}
+          onAngleChange={(angle) => goTo({ page: "studio", releaseId: studioId, angle }, false)}
+          onEdit={(channel, value) => changeDraft(studioId, studioAngle, (current) => busy.current ? current : ({ ...current, [channel]: value }))}
+          onSource={() => show("source")} onEmail={() => show("email")} onSave={() => void saveDraft(studioId, studioAngle, variant)}
+          onSchedule={(channel, fields) => scheduleDraft(studioId, studioAngle, channel, fields)} />
+      ) : displayed.page === "calendar" ? <Calendar items={items} drafts={drafts} busy={action === "generate"} onDraft={(id, angle) => void openStudio(id, angle)} />
         : displayed.page === "drafts" ? <SavedDrafts drafts={drafts} sample={sample} />
-          : <Inbox items={items} selected={selected}
+          : showWelcome ? <Welcome publicDemo={publicDemo} onSample={startSample} onConnect={() => openConnections("email")} onPaste={() => show("paste")} />
+          : <Inbox items={items} selected={selected} sample={sample}
               ready={new Set(items.filter((item) => drafts[item.releaseId]).map((item) => item.releaseId))}
               generating={action === "generate"}
               onSelect={(id) => updateSession((current) => ({ ...current, selected: id }))}
-              publicDemo={publicDemo} onConnect={() => openConnections("email")} onPaste={() => show("paste")} onDraft={(id) => void openStudio(id)} />}
+              publicDemo={publicDemo} onConnect={() => openConnections("email")} onPaste={() => show("paste")}
+              onSample={startSample} onDraft={(id) => void openStudio(id)} />}
 
       <Dialog open={overlay === "paste"} onOpenChange={(open) => { if (!open) show(null); }}>
         <DialogContent>

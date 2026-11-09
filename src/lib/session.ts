@@ -2,35 +2,29 @@
 
 import { useSyncExternalStore } from "react";
 import { z } from "zod";
-import { announcementSchema, draftResponseSchema, receiptSchema, releaseIdSchema, senderDomainsSchema, writingInstructionsSchema } from "./contracts";
+import { announcementSchema, releaseIdSchema, senderDomainsSchema, writingInstructionsSchema } from "./contracts";
 import { releaseIds, type ReleaseId } from "./releases";
+import { draftAngles, draftStateSchema, type DraftAngle } from "./studio-drafts";
+
+export type { DraftState } from "./studio-drafts";
 
 const key = "launch-notes.v1";
 const initial = "";
 let fallback = initial;
 const listeners = new Set<() => void>();
-const draftSchema = z.object({
-  generated: draftResponseSchema,
-  linkedin: z.string(),
-  x: z.string(),
-  writingSample: z.string().optional(),
-  receipt: receiptSchema.optional(),
-  attempt: z.object({ requestId: z.uuid(), accountId: z.string(), content: z.string() }).optional(),
-});
 const workspaceSchema = z.object({
   sample: z.boolean(),
   selected: releaseIdSchema.optional(),
   imported: z.array(announcementSchema).max(3),
-  drafts: z.partialRecord(releaseIdSchema, draftSchema),
-  sampleDrafts: z.partialRecord(releaseIdSchema, draftSchema).default({}),
-  publicDrafts: z.partialRecord(releaseIdSchema, draftSchema).default({}),
+  drafts: z.partialRecord(releaseIdSchema, draftStateSchema),
+  sampleDrafts: z.partialRecord(releaseIdSchema, draftStateSchema).default({}),
+  publicDrafts: z.partialRecord(releaseIdSchema, draftStateSchema).default({}),
   writingSample: z.string().max(700),
   writingInstructions: writingInstructionsSchema.default(""),
 });
 
-export type DraftState = z.infer<typeof draftSchema>;
 export type Session = z.infer<typeof workspaceSchema>;
-export type View = { page: "inbox" | "calendar" | "drafts" } | { page: "studio"; releaseId: ReleaseId };
+export type View = { page: "home" | "inbox" | "calendar" | "drafts" } | { page: "studio"; releaseId: ReleaseId; angle?: DraftAngle };
 
 const empty: Session = { sample: false, imported: [], drafts: {}, sampleDrafts: {}, publicDrafts: {}, writingSample: "", writingInstructions: "" };
 const serverSnapshot = () => initial;
@@ -103,11 +97,18 @@ const watchHash = (listener: () => void) => {
 };
 export function useView(): View {
   const hash = useSyncExternalStore(watchHash, () => window.location.hash, serverSnapshot).slice(1);
+  if (!hash || hash === "home") return { page: "home" };
   if (hash === "calendar" || hash === "drafts") return { page: hash };
-  const id = releaseIds.find((releaseId) => hash === `studio/${releaseId}`);
-  return id ? { page: "studio", releaseId: id } : { page: "inbox" };
+  const [page, release, angle, extra] = hash.split("/");
+  const id = releaseIds.find((releaseId) => releaseId === release);
+  const selected = draftAngles.find((draftAngle) => draftAngle === angle);
+  return page === "studio" && id && extra === undefined && (angle === undefined || selected)
+    ? { page: "studio", releaseId: id, angle: selected } : { page: "inbox" };
 }
-export function goTo(view: View) {
-  window.location.hash = view.page === "studio" ? `studio/${view.releaseId}` : view.page;
-  window.scrollTo(0, 0);
+export function studioHref(id: ReleaseId, angle?: DraftAngle) {
+  return `#studio/${id}${angle ? `/${angle}` : ""}`;
+}
+export function goTo(view: View, scroll = true) {
+  window.location.hash = view.page === "studio" ? studioHref(view.releaseId, view.angle) : view.page;
+  if (scroll) window.scrollTo(0, 0);
 }

@@ -11,7 +11,9 @@ npx --yes pnpm@12.16.1 install --frozen-lockfile
 npx --yes pnpm@12.16.1 dev
 ```
 
-Open http://127.0.0.1:3001. **Demo workspace → Load sample workspace** loads the three example announcements and the sample founder. Rehearsal draft saves are labeled and stay in the browser tab.
+Open http://127.0.0.1:3001. The landing page shows how one launch email becomes two drafts. **Try a sample release** opens Post approvals in the Launch inbox. Choose **Create drafts** under the release preview to open the Writing Studio. It opens the recommended angle for the release and gives a short reason below the tabs. Each angle shows editable LinkedIn and X cards. The first tab holds the original draft pair. The other two are labeled samples based on the release.
+
+Choose **Check source** on either card to read the release excerpts for that angle in the side panel, with a link to the full Zernio article. Choose **Schedule** to use the suggested slot or **Change** its date, time, and time zone. Each platform and angle has its own slot. **Content calendar → Rehearsed schedules** lists those entries and links back to the exact angle. Rehearsed schedules and draft saves stay in the browser tab.
 
 **How it works** opens the [engineering design article](http://127.0.0.1:3001/how-it-works) with diagrams of the service boundaries and draft save flow.
 
@@ -19,7 +21,7 @@ Open http://127.0.0.1:3001. **Demo workspace → Load sample workspace** loads t
 
 Import this repository as a Next.js project with the repository root as the root directory. Set `RELEASE_VOICE_MODE=public` in the Vercel project’s deployment environments. This works with automatic system environment exposure disabled. Use the same setting in `.env.local` to preview public mode on localhost.
 
-Public mode starts with sample announcements and simulates LinkedIn saves in the visitor’s tab. With no credentials, it uses labeled prewritten copy. To enable personalized drafting, set these server-side variables in Vercel:
+Public mode opens on the welcome screen and uses sample announcements for its inbox. It rehearses scheduling and LinkedIn saves in the visitor’s tab. With no credentials, it uses labeled prewritten copy. To enable personalized drafting, set these server-side variables in Vercel:
 
 | Variable | Purpose |
 | --- | --- |
@@ -35,9 +37,9 @@ The limiter reserves up to six generation requests per ten-minute bucket and 120
 Copy `.env.example` to this app’s private `.env.local`, configure the server-side keys, and start the app on loopback.
 
 1. Connect a personal LinkedIn account in the Zernio workspace for the API key. If multiple profiles are connected, choose the exact destination in the studio or pin it with `LAUNCH_NOTES_LINKEDIN_ACCOUNT_ID`.
-2. Connect Gmail or Outlook in Zernio and select **Connect email** in Release Voice to import matching launch emails. Or use **Paste a release link** with one of the three supplied Zernio URLs. Live mail is only fetched when you choose a mailbox.
-3. Choose **Draft my take**. With OpenRouter configured, the model writes both variants from public release facts and any preferences you save under **Demo workspace → Writing settings**. Without OpenRouter, the app labels the supplied example copy.
-4. Review both variants. **Save LinkedIn draft** sends one LinkedIn target and `isDraft: true` to Zernio. The receipt appears after Zernio confirms the draft, and the X copy remains editable. **Saved drafts** shows the confirmed provider draft ID.
+2. Connect Gmail or Outlook in Zernio and select **Import from email** in Release Voice to import matching launch emails. Or use **Paste a release link** with one of the three supplied Zernio URLs. Live mail is only fetched when you choose a mailbox.
+3. Choose **Create drafts**. With OpenRouter configured, the model writes the original LinkedIn and X drafts from public release facts and any preferences you save under **Demo workspace → Writing settings**. Without OpenRouter, the app labels the supplied example copy.
+4. Review both channels in the selected angle. **Save LinkedIn draft** sends one LinkedIn target and `isDraft: true` to Zernio. The receipt appears after Zernio confirms the draft, and the X copy remains editable. **Saved drafts** shows the confirmed provider draft ID. The scheduling panel records a rehearsal in the tab in this mode as well.
 
 In **Demo workspace → Inbox settings**, enter up to ten allowed sender domains, separated by commas or new lines. For example, `zernio.com` accepts `team@zernio.com`. Add subdomains separately. Clear the list to allow any sender domain. This preference is saved in your browser and applies to connected email imports.
 

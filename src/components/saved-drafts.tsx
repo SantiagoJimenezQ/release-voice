@@ -6,16 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { releaseIds, releases } from "@/lib/releases";
-import type { DraftState } from "@/lib/session";
+import { studioHref } from "@/lib/session";
+import { angleDraft, angleTitle, draftAngles, type DraftState } from "@/lib/studio-drafts";
 import { ChannelIcon } from "./chrome";
 
 export function SavedDrafts({ drafts, sample }: { drafts: Partial<Record<(typeof releaseIds)[number], DraftState>>; sample: boolean }) {
   const [search, setSearch] = useState("");
   const records = releaseIds.flatMap((id) => {
-    const receipt = drafts[id]?.receipt;
-    return receipt ? [{ id, receipt }] : [];
+    const draft = drafts[id];
+    if (!draft) return [];
+    return draftAngles.flatMap((angle) => {
+      const { receipt } = angleDraft(id, angle, draft);
+      return receipt ? [{ id, angle, title: angleTitle(id, angle, draft), receipt }] : [];
+    });
   });
-  const filtered = records.filter(({ id, receipt }) => `${releases[id].title} ${receipt.content}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const filtered = records.filter(({ id, title, receipt }) => `${releases[id].title} ${title} ${receipt.content}`.toLowerCase().includes(search.trim().toLowerCase()));
   return (
     <main className="surface saved-surface">
       <header className="page-heading">
@@ -24,14 +29,14 @@ export function SavedDrafts({ drafts, sample }: { drafts: Partial<Record<(typeof
       </header>
       {filtered.length ? (
         <div className="saved-groups">
-          {filtered.map(({ id, receipt }) => (
-            <article className="saved-group" key={id}>
-              <header><div><h2>{releases[id].title}</h2><p>{releases[id].date} release</p></div>
+          {filtered.map(({ id, angle, title, receipt }) => (
+            <article className="saved-group" key={`${id}/${angle}`}>
+              <header><div><h2>{releases[id].title}</h2><p>{title} · {releases[id].date} release</p></div>
                 <Badge variant="outline"><Check data-icon="inline-start" />{receipt.mode === "zernio" ? "Saved to Zernio" : "Saved in rehearsal"}</Badge></header>
               <div className="saved-channel">
                 <span><ChannelIcon channel="LinkedIn" /><strong>LinkedIn</strong></span>
                 <div><p className="saved-excerpt">{receipt.content}</p><small>{receipt.account}{receipt.mode === "zernio" ? ` · Draft ${receipt.postId}` : ""}</small></div>
-                <Button variant="link" asChild><a href={`#studio/${id}`}>Open LinkedIn draft</a></Button>
+                <Button variant="link" asChild><a href={studioHref(id, angle)}>Open LinkedIn draft</a></Button>
               </div>
             </article>
           ))}
