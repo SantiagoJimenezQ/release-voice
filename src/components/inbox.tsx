@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowRight, ExternalLink, Inbox as InboxIcon, Link2, LoaderCircle, Mail } from "lucide-react";
+import { ArrowRight, ExternalLink, Inbox as InboxIcon, Link2, LoaderCircle, Mail, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, ChannelIcon, HowItWorksLink } from "./chrome";
@@ -39,18 +39,24 @@ export function AnnouncementBody({ item, showLink = true }: { item: Announcement
 type Props = {
   items: Announcement[];
   selected?: Announcement;
-  ready: ReadonlySet<ReleaseId>;
+  samplesLoaded: boolean;
+  isReady: (item: Announcement) => boolean;
   generating: boolean;
   publicDemo: boolean;
-  sample: boolean;
-  onSelect: (id: ReleaseId) => void;
+  filterCount: number;
+  onFilters: () => void;
+  onSelect: (item: Announcement) => void;
   onConnect: () => void;
   onPaste: () => void;
   onSample: () => void;
-  onDraft: (id: ReleaseId) => void;
+  onDraft: (item: Announcement) => void;
 };
 
-export function Inbox({ items, selected, ready, generating, publicDemo, sample, onSelect, onConnect, onPaste, onSample, onDraft }: Props) {
+function sourceLabel(item: Announcement) {
+  return item.source === "sample" ? "Sample" : item.source === "link" ? "Pasted link" : item.provider ?? "Email";
+}
+
+export function Inbox({ items, selected, samplesLoaded, isReady, generating, publicDemo, filterCount, onFilters, onSelect, onConnect, onPaste, onSample, onDraft }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   const empty = !selected;
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [empty]);
@@ -66,41 +72,42 @@ export function Inbox({ items, selected, ready, generating, publicDemo, sample, 
           <h1 ref={heading} tabIndex={-1}>Launch inbox</h1>
           <p>Choose a release to draft for LinkedIn and X.</p>
         </div>
-        <div className="button-row flex-wrap">
-          <HowItWorksLink />
-          {!sample ? <Button variant="outline" className="ui-button" onClick={onConnect}><Mail data-icon="inline-start" />Import from email</Button> : null}
-          {!publicDemo ? <Button variant="outline" className="ui-button" onClick={onPaste}><Link2 data-icon="inline-start" />Paste a release link</Button> : null}
-        </div>
+        <HowItWorksLink />
       </header>
+      <div className="button-row inbox-import-actions flex-wrap" role="group" aria-label="Add releases">
+        <Button variant="outline" className="ui-button" disabled={generating} onClick={onConnect}><Mail data-icon="inline-start" />Import from email</Button>
+        <Button variant="outline" className="ui-button" disabled={generating} onClick={onPaste}><Link2 data-icon="inline-start" />Paste a release link</Button>
+        {!samplesLoaded && selected ? <Button variant="outline" className="ui-button" disabled={generating} onClick={onSample}>Load samples</Button> : null}
+        {!publicDemo ? <Button variant="ghost" className="ui-button" disabled={generating} onClick={onFilters}><Settings2 data-icon="inline-start" />Sender filters{filterCount ? ` (${filterCount})` : ""}</Button> : null}
+      </div>
       {selected ? (
         <div className="inbox-grid">
           <section aria-labelledby="inbox-releases" className="announcement-list">
             <div className="announcement-list-header">
-              <h2 id="inbox-releases">{sample ? "Sample releases" : "Releases"}</h2>
+              <h2 id="inbox-releases">Releases</h2>
               <Badge variant="outline" aria-label={`${items.length} ${items.length === 1 ? "release" : "releases"}`}>{items.length}</Badge>
             </div>
             {items.map((item) => {
-              const active = selected.releaseId === item.releaseId;
-              const source = item.source === "link" ? "Release link" : item.provider ?? "Email";
+              const active = selected.releaseId === item.releaseId && selected.source === item.source;
               const SourceIcon = item.source === "link" ? Link2 : Mail;
-              return <button type="button" className="announcement-row" key={item.releaseId} aria-pressed={active} aria-controls="release-preview"
-                disabled={generating && !active} onClick={() => onSelect(item.releaseId)}>
+              return <button type="button" className="announcement-row" key={`${item.source}/${item.releaseId}`} aria-pressed={active} aria-controls="release-preview"
+                disabled={generating} onClick={() => onSelect(item)}>
                 <SourceIcon aria-hidden="true" />
                 <span><strong>{item.subject}</strong>
-                  {item.source !== "sample" ? <small>{source}</small> : null}
-                  {ready.has(item.releaseId) ? <Badge variant="secondary">Drafts ready</Badge> : null}
+                  <small>{sourceLabel(item)}</small>
+                  {isReady(item) ? <Badge variant="secondary">Drafts ready</Badge> : null}
                 </span>
                 <time>{releases[item.releaseId].date.split(",")[0]}</time>
               </button>;
             })}
           </section>
-          <ReleasePreview selected={selected} hasDrafts={ready.has(selected.releaseId)} generating={generating} onDraft={onDraft} />
+          <ReleasePreview selected={selected} hasDrafts={isReady(selected)} generating={generating} onDraft={onDraft} />
         </div>
       ) : (
         <section className="inbox-empty launch-inbox-empty" aria-labelledby="empty-launch-inbox">
           <span className="empty-icon"><InboxIcon aria-hidden="true" /></span>
           <h2 id="empty-launch-inbox">No releases yet</h2>
-          <p>Paste a release link, import a launch email, or try the sample workspace.</p>
+          <p>Paste a release link, import a launch email, or try a sample release.</p>
           <Button variant="brand" className="primary-button" onClick={onSample}>
             Try a sample release <ArrowRight data-icon="inline-end" />
           </Button>
@@ -120,7 +127,7 @@ function ReleasePreview({ selected, hasDrafts, generating, onDraft }: {
 
   return (
     <article id="release-preview" aria-labelledby="release-preview-heading" className="reading-pane">
-      <p className="inbox-preview-label">Release preview</p>
+      <p className="inbox-preview-label">Release preview · {sourceLabel(selected)}</p>
       <h2 id="release-preview-heading">{selected.subject}</h2>
       <p className="inbox-release-summary">{release.facts}</p>
       <div className="inbox-source">
@@ -138,12 +145,12 @@ function ReleasePreview({ selected, hasDrafts, generating, onDraft }: {
           </span>
           <p>Review and edit both drafts in Writing Studio.</p>
         </div>
-        <Button className="primary-button" variant="brand" disabled={generating} onClick={() => onDraft(selected.releaseId)}>
+        <Button className="primary-button" variant="brand" disabled={generating} onClick={() => onDraft(selected)}>
           {generating ? "Preparing drafts…" : hasDrafts ? "Review drafts" : "Create drafts"}
           {generating ? <LoaderCircle data-icon="inline-end" className="animate-spin motion-reduce:animate-none" /> : <ArrowRight data-icon="inline-end" />}
         </Button>
       </div>
-      {selected.source !== "link" ? <details key={selected.releaseId} className="inbox-email-details">
+      {selected.source !== "link" ? <details key={`${selected.source}/${selected.releaseId}`} className="inbox-email-details">
         <summary>{selected.source === "sample" ? "View sample email" : "View launch email"}</summary>
         <AnnouncementBody item={selected} showLink={false} />
       </details> : null}

@@ -20,12 +20,16 @@ import { Calendar } from "./plan";
 import { SavedDrafts } from "./saved-drafts";
 import { Studio } from "./studio";
 
-type Overlay = "workspace" | "email" | "source" | "paste" | "connect" | "inbox-settings" | "writing-settings" | null;
+type Overlay = "workspace" | "email" | "source" | "paste" | "connect" | "local-email" | "inbox-settings" | "writing-settings" | null;
 type Action = "generate" | "save" | "mail" | null;
 const emptyConnections: Connections = { configured: false, linkedin: [], mail: [] };
 
 function linkAnnouncement(releaseId: ReleaseId): Announcement {
   return { releaseId, source: "link", subject: releases[releaseId].subject };
+}
+
+function draftBucket(publicDemo: boolean, sample: boolean) {
+  return publicDemo ? "publicDrafts" : sample ? "sampleDrafts" : "drafts";
 }
 
 export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: boolean; publicLiveDrafting: boolean }) {
@@ -43,21 +47,27 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   const [writingInput, setWritingInput] = useState({ writingInstructions: "", writingSample: "" });
   const [paste, setPaste] = useState("");
   const [connectFor, setConnectFor] = useState<"email" | "linkedin">("email");
+  const [returnToEmail, setReturnToEmail] = useState(false);
   const [dialogNotice, setDialogNotice] = useState("");
   const busy = useRef(false);
   const sample = publicDemo || session.sample;
-  const draftKey = publicDemo ? "publicDrafts" : sample ? "sampleDrafts" : "drafts";
+  const draftKey = draftBucket(publicDemo, sample);
   const drafts = session[draftKey];
   const visibleMail = allowedDomains.length ? mail.filter((item) => item.senderDomain && allowedDomains.includes(item.senderDomain)) : mail;
-  const items = sample ? sampleAnnouncements : [...new Map(
-    [...session.imported, ...visibleMail].map((item) => [item.releaseId, item]),
-  ).values()];
-  const selected = items.find((item) => item.releaseId === (session.selected ?? (publicDemo ? "approvals" : undefined))) ?? items[0];
+  const samplesLoaded = publicDemo || session.samplesLoaded === true || session.sample;
+  const personalItems = [...visibleMail, ...session.imported];
+  const items = [...personalItems, ...(samplesLoaded ? sampleAnnouncements : [])];
+  const selected = items.find((item) => item.releaseId === session.selected && item.source === session.selectedSource)
+    ?? (sample ? sampleAnnouncements : personalItems).find((item) => item.releaseId === (session.selected ?? (publicDemo ? "approvals" : undefined)))
+    ?? items[0];
+  const workspaceItems = publicDemo ? items : sample ? sampleAnnouncements : personalItems;
+  const calendarItems = [...new Map(workspaceItems.map((item) => [item.releaseId, item])).values()];
   const studioId = view.page === "studio" ? view.releaseId : undefined;
   const studioAngle = view.page === "studio" ? view.angle ?? recommendedAngles[view.releaseId].angle : "original";
   const draft = studioId ? drafts[studioId] : undefined;
   const variant = studioId && draft ? angleDraft(studioId, studioAngle, draft) : undefined;
-  const studioItem = studioId ? items.find((item) => item.releaseId === studioId) ?? linkAnnouncement(studioId) : undefined;
+  const studioItem = studioId ? (selected?.releaseId === studioId && workspaceItems.includes(selected) ? selected
+    : workspaceItems.find((item) => item.releaseId === studioId)) ?? linkAnnouncement(studioId) : undefined;
   const target = connections.linkedin.find((item) => item.id === targetId) ?? (
     connections.linkedin.length === 1 ? connections.linkedin[0] : undefined
   );
@@ -89,12 +99,17 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   function openConnections(forKind: "email" | "linkedin") {
+    if (publicDemo) {
+      if (forKind === "email") show("local-email");
+      return;
+    }
     setConnectFor(forKind);
     show("connect");
     void refreshConnections();
   }
 
-  function openInboxSettings() {
+  function openInboxSettings(fromEmail = false) {
+    setReturnToEmail(fromEmail);
     setDomainInput(allowedDomains.join("\n"));
     show("inbox-settings");
   }
@@ -106,7 +121,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
       return;
     }
     saveSenderDomains([...new Set(domains.data)]);
-    show(null);
+    show(returnToEmail ? "connect" : null);
   }
 
   function openWritingSettings() {
@@ -115,7 +130,11 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   function switchWorkspace(sample: boolean) {
-    updateSession((current) => ({ ...current, sample, selected: sample ? "approvals" : undefined }));
+    updateSession((current) => ({
+      ...current, sample, samplesLoaded: sample || current.samplesLoaded || current.sample,
+      selected: sample ? "approvals" : personalItems[0]?.releaseId,
+      selectedSource: sample ? "sample" : personalItems[0]?.source,
+    }));
     setNotice("");
     show(null);
     goTo({ page: "inbox" });
@@ -130,7 +149,9 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     updateSession((current) => ({
       ...current,
       sample: false,
+      samplesLoaded: current.samplesLoaded || current.sample,
       selected: id,
+      selectedSource: "link",
       imported: [...current.imported.filter((item) => item.releaseId !== id), linkAnnouncement(id)],
     }));
     setPaste("");
@@ -139,7 +160,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
   }
 
   async function importMail(accountId: string) {
-    if (busy.current) return;
+    if (publicDemo || busy.current) return;
     busy.current = true;
     setAction("mail");
     setDialogNotice("");
@@ -152,7 +173,10 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
         setDialogNotice(allowedDomains.length ? "No launch emails matched your allowed sender domains." : "No matching launch emails yet. You can paste a release link from the inbox.");
         return;
       }
-      updateSession((current) => ({ ...current, sample: false, selected: items[0].releaseId }));
+      updateSession((current) => ({
+        ...current, sample: false, samplesLoaded: current.samplesLoaded || current.sample,
+        selected: items[0].releaseId, selectedSource: "email",
+      }));
       show(null);
       goTo({ page: "inbox" });
     } catch (error) {
@@ -163,17 +187,28 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
     }
   }
 
-  async function openStudio(id: ReleaseId, angle?: DraftAngle) {
+  function selectAnnouncement(item: Announcement) {
+    const isSample = item.source === "sample";
+    updateSession((current) => ({
+      ...current, sample: isSample, samplesLoaded: current.samplesLoaded || current.sample || isSample,
+      selected: item.releaseId, selectedSource: item.source,
+    }));
+  }
+
+  async function openStudio(id: ReleaseId, angle?: DraftAngle, item?: Announcement) {
     if (busy.current) return;
+    const useSamples = item ? item.source === "sample" : session.sample;
+    const destination = draftBucket(publicDemo, useSamples);
+    if (item) selectAnnouncement(item);
     setNotice("");
-    if (drafts[id]) {
+    if (session[destination][id]) {
       goTo({ page: "studio", releaseId: id, angle });
       return;
     }
     busy.current = true;
     setAction("generate");
     try {
-      const sampleMode = publicDemo ? !publicLiveDrafting : session.sample;
+      const sampleMode = publicDemo ? !publicLiveDrafting : useSamples;
       const writingSample = sampleMode ? "" : session.writingSample.trim();
       const generated = await request("/api/generate", draftResponseSchema, {
         releaseId: id,
@@ -183,7 +218,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
       });
       updateSession((current) => ({
         ...current,
-        [draftKey]: { ...current[draftKey], [id]: {
+        [destination]: { ...current[destination], [id]: {
           generated,
           linkedin: `${generated.opening}\n${generated.linkedinBody}`,
           x: generated.x,
@@ -253,7 +288,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
 
   function startSample() {
     if (publicDemo) {
-      updateSession((current) => ({ ...current, selected: "approvals" }));
+      updateSession((current) => ({ ...current, selected: "approvals", selectedSource: "sample" }));
       goTo({ page: "inbox" });
     } else {
       switchWorkspace(true);
@@ -275,15 +310,16 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
           onEdit={(channel, value) => changeDraft(studioId, studioAngle, (current) => busy.current ? current : ({ ...current, [channel]: value }))}
           onSource={() => show("source")} onEmail={() => show("email")} onSave={() => void saveDraft(studioId, studioAngle, variant)}
           onSchedule={(channel, fields) => scheduleDraft(studioId, studioAngle, channel, fields)} />
-      ) : displayed.page === "calendar" ? <Calendar items={items} drafts={drafts} date={displayed.date} busy={action === "generate"} onDraft={(id, angle) => void openStudio(id, angle)} />
+      ) : displayed.page === "calendar" ? <Calendar items={calendarItems} drafts={drafts} date={displayed.date} busy={action === "generate"} onDraft={(id, angle) => void openStudio(id, angle)} />
         : displayed.page === "drafts" ? <SavedDrafts drafts={drafts} sample={sample} />
           : showWelcome ? <Welcome publicDemo={publicDemo} onSample={startSample} onConnect={() => openConnections("email")} onPaste={() => show("paste")} />
-          : <Inbox items={items} selected={selected} sample={sample}
-              ready={new Set(items.filter((item) => drafts[item.releaseId]).map((item) => item.releaseId))}
+          : <Inbox items={items} selected={selected} samplesLoaded={samplesLoaded}
+              isReady={(item) => Boolean(session[draftBucket(publicDemo, item.source === "sample")][item.releaseId])}
               generating={action === "generate"}
-              onSelect={(id) => updateSession((current) => ({ ...current, selected: id }))}
-              publicDemo={publicDemo} onConnect={() => openConnections("email")} onPaste={() => show("paste")}
-              onSample={startSample} onDraft={(id) => void openStudio(id)} />}
+              onSelect={selectAnnouncement}
+              publicDemo={publicDemo} filterCount={allowedDomains.length} onFilters={() => openInboxSettings()}
+              onConnect={() => openConnections("email")} onPaste={() => show("paste")}
+              onSample={startSample} onDraft={(item) => void openStudio(item.releaseId, undefined, item)} />}
 
       <Dialog open={overlay === "paste"} onOpenChange={(open) => { if (!open) show(null); }}>
         <DialogContent>
@@ -305,7 +341,7 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
               {sample ? <Button variant="outline" disabled={action !== null} onClick={() => switchWorkspace(false)}>Use my workspace</Button>
                 : <Button variant="outline" disabled={action !== null} onClick={() => switchWorkspace(true)}>Load sample workspace</Button>}
               <Button variant="outline" onClick={() => openConnections("linkedin")}>LinkedIn connections</Button>
-              <Button variant="outline" onClick={openInboxSettings}><Settings2 data-icon="inline-start" />Inbox settings</Button>
+              <Button variant="outline" onClick={() => openInboxSettings()}><Settings2 data-icon="inline-start" />Inbox settings</Button>
             </> : null}
             <Button variant="outline" onClick={openWritingSettings}><Pencil data-icon="inline-start" />Writing settings</Button>
           </div>
@@ -338,11 +374,11 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
         </DialogContent>
       </Dialog>
 
-      <Dialog open={overlay === "inbox-settings"} onOpenChange={(open) => { if (!open) show(null); }}>
+      <Dialog open={overlay === "inbox-settings"} onOpenChange={(open) => { if (!open) show(returnToEmail ? "connect" : null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Inbox settings</DialogTitle>
-            <DialogDescription>Choose which senders can appear in your launch inbox.</DialogDescription>
+            <DialogDescription>Choose which sender domains to include when you import launch emails.</DialogDescription>
           </DialogHeader>
           <form className="overlay-form" onSubmit={(event) => { event.preventDefault(); saveInboxSettings(); }}>
             <label htmlFor="sender-domains">Allowed sender domains</label>
@@ -356,14 +392,32 @@ export function Workspace({ publicDemo, publicLiveDrafting }: { publicDemo: bool
         </DialogContent>
       </Dialog>
 
+      <Dialog open={overlay === "local-email"} onOpenChange={(open) => { if (!open) show(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import from email</DialogTitle>
+            <DialogDescription>Run Release Voice locally and connect Gmail or Outlook through Zernio to import launch emails by sender domain.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => show("paste")}>Paste a release link</Button>
+            <Button asChild variant="brand"><a href="https://github.com/SantiagoJimenezQ/release-voice#live-local-mode" target="_blank" rel="noreferrer">Local setup <ExternalLink data-icon="inline-end" /></a></Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={overlay === "connect"} onOpenChange={(open) => { if (!open && action !== "mail") show(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{connectFor === "email" ? "Connect email" : "Connect LinkedIn"}</DialogTitle>
+            <DialogTitle>{connectFor === "email" ? "Import from email" : "Connect LinkedIn"}</DialogTitle>
             <DialogDescription>{connectFor === "email" ? "Choose a mailbox connected through Zernio." : "Choose where to save your LinkedIn draft."}</DialogDescription>
           </DialogHeader>
           <div className="overlay-form">
-            {connectFor === "email" && allowedDomains.length > 0 ? <p className="overlay-muted">Sender filter active · {allowedDomains.length} allowed {allowedDomains.length === 1 ? "domain" : "domains"}</p> : null}
+            {connectFor === "email" ? (
+              <div className="button-row flex-wrap">
+                <p className="overlay-muted">{allowedDomains.length ? `Allowed senders: ${allowedDomains.join(", ")}` : "All sender domains allowed"}</p>
+                <Button variant="outline" disabled={action === "mail"} onClick={() => openInboxSettings(true)}>Edit sender filters</Button>
+              </div>
+            ) : null}
             {loadingConnections ? <p className="connection-loading"><LoaderCircle className="animate-spin motion-reduce:animate-none" />Checking Zernio connections…</p> : null}
             {connectFor === "email" ? connections.mail.map((account) =>
               <Button key={account.id} variant="outline" disabled={action !== null} onClick={() => void importMail(account.id)}>

@@ -57,16 +57,16 @@ export function Welcome({ publicDemo, onSample, onConnect, onPaste }: {
         </figure>
       </div>
 
-      {!publicDemo ? <section className="welcome-import" aria-labelledby="welcome-import-heading">
+      <section className="welcome-import" aria-labelledby="welcome-import-heading">
         <div>
           <h2 id="welcome-import-heading">Have a release to share?</h2>
-          <p>Start from a link or a launch email.</p>
+          <p>{publicDemo ? "Paste a supported release link, or set up email import locally." : "Start from a link or a launch email."}</p>
         </div>
         <div className="button-row">
           <Button variant="outline" className="ui-button" onClick={onPaste}><Link2 data-icon="inline-start" />Paste a release link</Button>
           <Button variant="outline" className="ui-button" onClick={onConnect}><Mail data-icon="inline-start" />Import from email</Button>
         </div>
-      </section> : null}
+      </section>
     </main>
   );
 }

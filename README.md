@@ -21,7 +21,7 @@ Choose **Check source** on either card to read the release excerpts for that ang
 
 Import this repository as a Next.js project with the repository root as the root directory. Set `RELEASE_VOICE_MODE=public` in the Vercel project’s deployment environments. This works with automatic system environment exposure disabled. Use the same setting in `.env.local` to preview public mode on localhost.
 
-Public mode opens on the welcome screen and uses sample announcements for its inbox. It rehearses scheduling and LinkedIn saves in the visitor’s tab. With no credentials, it uses labeled prewritten copy. To enable personalized drafting, set these server-side variables in Vercel:
+Public mode opens on the welcome screen. The inbox shows sample announcements alongside any supported release links the visitor pastes. **Import from email** points to local setup. The public demo rehearses scheduling and LinkedIn saves in the visitor’s tab. With no credentials, it uses labeled prewritten copy. To enable personalized drafting, set these server-side variables in Vercel:
 
 | Variable | Purpose |
 | --- | --- |
@@ -37,11 +37,11 @@ The limiter reserves up to six generation requests per ten-minute bucket and 120
 Copy `.env.example` to this app’s private `.env.local`, configure the server-side keys, and start the app on loopback.
 
 1. Connect a personal LinkedIn account in the Zernio workspace for the API key. If multiple profiles are connected, choose the exact destination in the studio or pin it with `LAUNCH_NOTES_LINKEDIN_ACCOUNT_ID`.
-2. Connect Gmail or Outlook in Zernio and select **Import from email** in Release Voice to import matching launch emails. Or use **Paste a release link** with one of the three supplied Zernio URLs. Live mail is only fetched when you choose a mailbox.
+2. Add a release from samples, a pasted link, or email. To import mail, connect Gmail or Outlook in Zernio, choose **Import from email**, and select the mailbox. Live mail is fetched only when you choose a mailbox. **Paste a release link** accepts any of the three supplied Zernio URLs. The inbox labels the source of each release and keeps samples alongside imported emails and links.
 3. Choose **Create drafts**. With OpenRouter configured, the model writes the original LinkedIn and X drafts from public release facts and any preferences you save under **Demo workspace → Writing settings**. Without OpenRouter, the app labels the supplied example copy.
 4. Review both channels in the selected angle. **Save LinkedIn draft** sends one LinkedIn target and `isDraft: true` to Zernio. The receipt appears after Zernio confirms the draft, and the X copy remains editable. **Saved drafts** shows the confirmed provider draft ID. The scheduling panel records a rehearsal in the tab in this mode as well.
 
-In **Demo workspace → Inbox settings**, enter up to ten allowed sender domains, separated by commas or new lines. For example, `zernio.com` accepts `team@zernio.com`. Add subdomains separately. Clear the list to allow any sender domain. This preference is saved in your browser and applies to connected email imports.
+Use **Sender filters** in the inbox or **Edit sender filters** before choosing a mailbox. Enter up to ten allowed sender domains, separated by commas or new lines. For example, `zernio.com` accepts `team@zernio.com`. Add subdomains separately. Clear the list to allow any sender domain. This preference is saved in your browser and applies only to email.
 
 Writing settings has separate fields for instructions and a writing sample. For example, ask for a direct tone and an agency audience, then paste a few lines of your own writing as a style reference. Release Voice sends both optional fields to OpenRouter for new AI drafts. Saved drafts retain their edits when reopened. The sample workspace uses prewritten copy.
 

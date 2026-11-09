@@ -14,7 +14,9 @@ let fallback = initial;
 const listeners = new Set<() => void>();
 const workspaceSchema = z.object({
   sample: z.boolean(),
+  samplesLoaded: z.boolean().optional(),
   selected: releaseIdSchema.optional(),
+  selectedSource: announcementSchema.shape.source.optional(),
   imported: z.array(announcementSchema).max(3),
   drafts: z.partialRecord(releaseIdSchema, draftStateSchema),
   sampleDrafts: z.partialRecord(releaseIdSchema, draftStateSchema).default({}),
