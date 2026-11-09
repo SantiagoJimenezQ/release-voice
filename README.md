@@ -2,6 +2,8 @@
 
 A standalone Next.js and shadcn demo for a founder reviewing a launch announcement and drafting a personal take for LinkedIn and X.
 
+[Try the live demo](https://release-voice.vercel.app/)
+
 ## Run
 
 From this directory, use Node.js 22 or newer and the pinned pnpm 12.16.1.
